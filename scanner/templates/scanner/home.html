@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>SecureScan v2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: sans-serif; background: #0a0e1a; color: #e0e6f0; min-height: 100vh; }
+        nav { background: #0d1117; border-bottom: 1px solid #1f6feb; padding: 16px 32px; display: flex; align-items: center; gap: 12px; }
+        .logo { font-size: 22px; font-weight: 700; color: #58a6ff; }
+        .logo span { color: #3fb950; }
+        .badge { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
+        .container { max-width: 960px; margin: 0 auto; padding: 0 20px 60px; }
+        .tabs { display: flex; gap: 4px; padding: 24px 0 0; margin-bottom: 28px; border-bottom: 1px solid #21262d; flex-wrap: wrap; }
+        .tab { padding: 10px 18px; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: 600; font-size: 13px; color: #8b949e; border: 1px solid transparent; border-bottom: none; transition: all 0.2s; }
+        .tab.active { background: #0d1117; color: #58a6ff; border-color: #21262d; margin-bottom: -1px; }
+        .tab:hover { color: #e0e6f0; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .hero { text-align: center; padding: 28px 20px 20px; }
+        .hero h2 { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 6px; }
+        .hero h2 span { color: #58a6ff; }
+        .hero p { color: #8b949e; font-size: 13px; }
+        .card { background: #0d1117; border: 1px solid #21262d; border-radius: 14px; padding: 28px 32px; margin-bottom: 16px; }
+        .card h3 { font-size: 16px; color: #fff; margin-bottom: 6px; }
+        .card p { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
+        .upload-zone { border: 2px dashed #30363d; border-radius: 12px; padding: 36px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
+        .upload-zone:hover { border-color: #58a6ff; }
+        .upload-icon { font-size: 40px; margin-bottom: 10px; }
+        .upload-zone h3 { font-size: 16px; color: #fff; margin-bottom: 6px; }
+        .upload-zone p { color: #8b949e; font-size: 13px; margin-bottom: 18px; }
+        input[type=file] { display: none; }
+        .btn { border: none; padding: 10px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.85; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-blue { background: #1f6feb; color: white; }
+        .btn-green { background: #238636; color: white; }
+        .btn-red { background: #b91c1c; color: white; }
+        .btn-pdf { background: #7c3aed; color: white; margin-top: 12px; width: 100%; padding: 11px; font-size: 13px; display: none; }
+        .btn-full { width: 100%; margin-top: 12px; padding: 13px; font-size: 15px; display: none; }
+        .file-ok { background: #1f2d1f; border: 1px solid #3fb950; border-radius: 8px; padding: 10px 14px; margin-top: 12px; color: #3fb950; font-size: 13px; display: none; }
+        .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
+        .input-field { flex: 1; min-width: 200px; background: #010409; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; color: #e0e6f0; font-size: 14px; outline: none; }
+        .input-field:focus { border-color: #58a6ff; }
+        .input-small { width: 160px; flex: none; }
+        .loader { display: none; text-align: center; padding: 32px; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .result-box { margin-top: 24px; display: none; }
+        .nivel-banner { border-radius: 12px; padding: 20px 24px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }
+        .nivel-ALTO { background: #2d1117; border: 1px solid #f85149; }
+        .nivel-MEDIO { background: #2d2208; border: 1px solid #d29922; }
+        .nivel-BAJO { background: #1a2d1a; border: 1px solid #3fb950; }
+        .nivel-texto { font-size: 24px; font-weight: 800; }
+        .nivel-label { font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 2px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+        .stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
+        .stat-card { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; padding: 16px; text-align: center; }
+        .stat-n { font-size: 28px; font-weight: 800; color: #58a6ff; }
+        .stat-l { font-size: 11px; color: #8b949e; margin-top: 3px; }
+        .sec-titulo { font-size: 15px; font-weight: 700; color: #fff; margin: 18px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #21262d; }
+        .item { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; }
+        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+        .item-titulo { font-weight: 600; font-size: 13px; }
+        .item-desc { font-size: 12px; color: #8b949e; margin-top: 2px; }
+        .item-valor { font-size: 11px; color: #58a6ff; background: #010409; border-radius: 4px; padding: 4px 8px; margin-top: 6px; font-family: monospace; word-break: break-all; }
+        .item-rec { font-size: 11px; color: #d29922; background: #2d220822; border: 1px solid #d2992244; border-radius: 4px; padding: 6px 10px; margin-top: 6px; }
+        .item-detalle { font-size: 11px; color: #8b949e; background: #010409; border-radius: 6px; padding: 8px; margin-top: 6px; font-family: monospace; max-height: 90px; overflow-y: auto; white-space: pre-wrap; }
+        .badge-n { padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+        .badge-ALTO { background: #f8514922; color: #f85149; border: 1px solid #f85149; }
+        .badge-MEDIO { background: #d2992222; color: #d29922; border: 1px solid #d29922; }
+        .badge-BAJO { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
+        .badge-OK { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
+        .puertos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+        .puerto { border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; }
+        .puerto-ok { background: #0d1117; border: 1px solid #21262d; }
+        .puerto-mal { background: #2d1117; border: 1px solid #f85149; }
+        .p-num { font-family: monospace; font-size: 15px; font-weight: 700; color: #58a6ff; }
+        .p-svc { font-size: 11px; color: #8b949e; }
+        .tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
+        .tag-mal { background: #f8514922; color: #f85149; border: 1px solid #f85149; }
+        .tag-ok { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
+        .bar-wrap { background: #21262d; border-radius: 6px; height: 8px; margin: 6px 0 3px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 6px; transition: width 1s; }
+        .bar-alto { background: #f85149; }
+        .bar-medio { background: #d29922; }
+        .bar-bajo { background: #3fb950; }
+        .ssl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #010409; border: 1px solid #21262d; border-radius: 8px; padding: 12px 16px; margin-top: 8px; }
+        .ssl-item .k { font-size: 11px; color: #8b949e; }
+        .ssl-item .v { font-size: 13px; font-weight: 600; }
+        .hora-chart { display: flex; align-items: flex-end; gap: 3px; height: 60px; padding: 0 2px; }
+        .hora-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; }
+        .hora-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
+        .hora-label { font-size: 9px; color: #8b949e; margin-top: 3px; }
+        .presente-border { border-left: 3px solid #3fb950; }
+        .faltante-border { border-left: 3px solid #f85149; }
+        .no-data { color: #8b949e; font-size: 13px; text-align: center; padding: 20px; background: #0d1117; border-radius: 10px; border: 1px solid #21262d; }
+        .pdf-loading { display: none; text-align: center; padding: 10px; color: #7c3aed; font-size: 13px; }
+        @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2,1fr); } .input-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+<nav>
+    <div class="logo">Secure<span>Scan</span></div>
+    <div class="badge">v2.0 Defensivo</div>
+</nav>
+<div class="container">
+    <div class="tabs">
+        <div class="tab active" onclick="cambiarTab('logs',this)">&#128269; Analizador de Logs</div>
+        <div class="tab" onclick="cambiarTab('puertos',this)">&#128268; Escaner de Puertos</div>
+        <div class="tab" onclick="cambiarTab('headers',this)">&#128274; Headers HTTP</div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="panel active" id="panel-logs">
+        <div class="hero">
+            <h2>Analizador de <span>Logs</span></h2>
+            <p>Detecta SQLi, XSS, Path Traversal, herramientas de hacking, fuerza bruta e IPs sospechosas</p>
+        </div>
+        <div class="upload-zone" id="dropZone" onclick="document.getElementById('archivo_log').click()">
+            <div class="upload-icon">&#128196;</div>
+            <h3>Arrastra o selecciona tu archivo de logs</h3>
+            <p>Formatos: .log .txt</p>
+            <input type="file" id="archivo_log" accept=".log,.txt">
+            <button class="btn btn-blue" onclick="event.stopPropagation();document.getElementById('archivo_log').click()">Seleccionar archivo</button>
+            <div class="file-ok" id="fileOk"></div>
+            <button class="btn btn-green btn-full" id="btnAnalizar" onclick="event.stopPropagation();analizarLogs()">&#128737; Analizar ahora</button>
+        </div>
+        <div class="loader" id="loader-logs"><div class="spinner"></div><p style="color:#8b949e">Analizando amenazas...</p></div>
+        <div class="result-box" id="result-logs"></div>
+        <button class="btn btn-pdf" id="btnPdfLogs" onclick="exportarPdf('logs')">&#128196; Exportar reporte PDF</button>
+        <div class="pdf-loading" id="pdf-loading-logs">Generando PDF...</div>
+    </div>
+
+    <!-- PUERTOS -->
+    <div class="panel" id="panel-puertos">
+        <div class="hero">
+            <h2>Escaner de <span>Puertos</span></h2>
+            <p>Detecta puertos abiertos, servicios peligrosos y recibe recomendaciones</p>
+        </div>
+        <div class="card">
+            <h3>Host a escanear</h3>
+            <p>Ingresa IP o dominio. Campo de puertos extra es opcional.</p>
+            <div class="input-row">
+                <input class="input-field" type="text" id="inputHost" placeholder="192.168.1.1 o scanme.nmap.org">
+                <input class="input-field input-small" type="text" id="inputPuertosExtra" placeholder="8000,9000">
+                <button class="btn btn-blue" onclick="escanearPuertos()">Escanear</button>
+            </div>
+        </div>
+        <div class="loader" id="loader-puertos"><div class="spinner"></div><p style="color:#8b949e">Escaneando puertos...</p></div>
+        <div class="result-box" id="result-puertos"></div>
+        <button class="btn btn-pdf" id="btnPdfPuertos" onclick="exportarPdf('puertos')">&#128196; Exportar reporte PDF</button>
+        <div class="pdf-loading" id="pdf-loading-puertos">Generando PDF...</div>
+    </div>
+
+    <!-- HEADERS -->
+    <div class="panel" id="panel-headers">
+        <div class="hero">
+            <h2>Verificador de <span>Headers HTTP</span></h2>
+            <p>Analiza 8 headers de seguridad, certificado SSL y redireccion HTTPS</p>
+        </div>
+        <div class="card">
+            <h3>Sitio web a analizar</h3>
+            <p>Ingresa URL o dominio. Ejemplo: github.com</p>
+            <div class="input-row">
+                <input class="input-field" type="text" id="inputUrl" placeholder="github.com o https://example.com">
+                <button class="btn btn-blue" onclick="verificarHeaders()">Verificar</button>
+            </div>
+        </div>
+        <div class="loader" id="loader-headers"><div class="spinner"></div><p style="color:#8b949e">Verificando seguridad...</p></div>
+        <div class="result-box" id="result-headers"></div>
+        <button class="btn btn-pdf" id="btnPdfHeaders" onclick="exportarPdf('headers')">&#128196; Exportar reporte PDF</button>
+        <div class="pdf-loading" id="pdf-loading-headers">Generando PDF...</div>
+    </div>
+</div>
+
+<script>
+var datosGuardados = { logs: null, puertos: null, headers: null };
+var objetivoGuardado = { logs: '', puertos: '', headers: '' };
+
+function cambiarTab(nombre, el) {
+    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    el.classList.add('active');
+    document.getElementById('panel-' + nombre).classList.add('active');
+}
+
+var inputFile = document.getElementById('archivo_log');
+var fileOk = document.getElementById('fileOk');
+var btnAnalizar = document.getElementById('btnAnalizar');
+
+inputFile.addEventListener('change', function() {
+    if (inputFile.files.length > 0) {
+        fileOk.textContent = 'Listo: ' + inputFile.files[0].name + ' (' + (inputFile.files[0].size/1024).toFixed(1) + ' KB)';
+        fileOk.style.display = 'block';
+        btnAnalizar.style.display = 'block';
+    }
+});
+
+var dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor='#58a6ff'; });
+dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor='#30363d'; });
+dropZone.addEventListener('drop', function(e) {
+    e.preventDefault(); dropZone.style.borderColor='#30363d';
+    if (e.dataTransfer.files.length > 0) { inputFile.files = e.dataTransfer.files; inputFile.dispatchEvent(new Event('change')); }
+});
+
+function analizarLogs() {
+    var archivo = inputFile.files[0];
+    if (!archivo) return;
+    document.getElementById('loader-logs').style.display = 'block';
+    document.getElementById('result-logs').style.display = 'none';
+    document.getElementById('btnPdfLogs').style.display = 'none';
+    btnAnalizar.disabled = true;
+    var fd = new FormData();
+    fd.append('archivo_log', archivo);
+    fetch('/analizar/', { method: 'POST', body: fd })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('loader-logs').style.display = 'none';
+        btnAnalizar.disabled = false;
+        if (d.success) {
+            datosGuardados.logs = d.resultado;
+            objetivoGuardado.logs = archivo.name;
+            mostrarLogs(d.resultado);
+            document.getElementById('btnPdfLogs').style.display = 'block';
+        }
+    })
+    .catch(function() { document.getElementById('loader-logs').style.display = 'none'; btnAnalizar.disabled = false; alert('Error al analizar'); });
+}
+
+function escanearPuertos() {
+    var host = document.getElementById('inputHost').value.trim();
+    if (!host) { alert('Ingresa un host'); return; }
+    var extra = document.getElementById('inputPuertosExtra').value.trim();
+    var puertosExtra = extra ? extra.split(',').map(function(p){return parseInt(p.trim());}).filter(function(p){return !isNaN(p);}) : [];
+    document.getElementById('loader-puertos').style.display = 'block';
+    document.getElementById('result-puertos').style.display = 'none';
+    document.getElementById('btnPdfPuertos').style.display = 'none';
+    fetch('/escanear/', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({host:host, puertos_extra:puertosExtra}) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('loader-puertos').style.display = 'none';
+        if (d.success) {
+            datosGuardados.puertos = d.resultado;
+            objetivoGuardado.puertos = host;
+            mostrarPuertos(d.resultado);
+            document.getElementById('btnPdfPuertos').style.display = 'block';
+        }
+    })
+    .catch(function() { document.getElementById('loader-puertos').style.display = 'none'; alert('Error al escanear'); });
+}
+
+function verificarHeaders() {
+    var url = document.getElementById('inputUrl').value.trim();
+    if (!url) { alert('Ingresa una URL'); return; }
+    document.getElementById('loader-headers').style.display = 'block';
+    document.getElementById('result-headers').style.display = 'none';
+    document.getElementById('btnPdfHeaders').style.display = 'none';
+    fetch('/headers/', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url:url}) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        document.getElementById('loader-headers').style.display = 'none';
+        if (d.success) {
+            datosGuardados.headers = d.resultado;
+            objetivoGuardado.headers = url;
+            mostrarHeaders(d.resultado);
+            document.getElementById('btnPdfHeaders').style.display = 'block';
+        }
+    })
+    .catch(function() { document.getElementById('loader-headers').style.display = 'none'; alert('Error al verificar'); });
+}
+
+function exportarPdf(tipo) {
+    if (!datosGuardados[tipo]) { alert('Primero realiza un analisis'); return; }
+    var loadingEl = document.getElementById('pdf-loading-' + tipo);
+    var btnEl = document.getElementById('btnPdf' + tipo.charAt(0).toUpperCase() + tipo.slice(1));
+    loadingEl.style.display = 'block';
+    btnEl.disabled = true;
+    fetch('/exportar-pdf/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ tipo: tipo, datos: datosGuardados[tipo], objetivo: objetivoGuardado[tipo] })
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('Error al generar PDF');
+        return r.blob();
+    })
+    .then(function(blob) {
+        loadingEl.style.display = 'none';
+        btnEl.disabled = false;
+        var url = window.URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'securescan_reporte_' + tipo + '.pdf';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(function() { loadingEl.style.display = 'none'; btnEl.disabled = false; alert('Error al generar PDF'); });
+}
+
+function nc(nivel) { return nivel.indexOf('ALTO')>=0?'ALTO':nivel.indexOf('MEDIO')>=0?'MEDIO':'BAJO'; }
+
+function mostrarLogs(r) {
+    var div = document.getElementById('result-logs');
+    var n = nc(r.resumen.nivel_riesgo);
+    var html = '<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128737;</div><div><div class="nivel-label">Nivel de riesgo detectado</div><div class="nivel-texto">'+r.resumen.nivel_riesgo+'</div></div></div>';
+    html += '<div class="stats-grid"><div class="stat-card"><div class="stat-n">'+r.resumen.total_lineas+'</div><div class="stat-l">Lineas analizadas</div></div><div class="stat-card"><div class="stat-n" style="color:'+(r.resumen.total_amenazas>0?'#f85149':'#3fb950')+'">'+r.resumen.total_amenazas+'</div><div class="stat-l">Amenazas</div></div><div class="stat-card"><div class="stat-n" style="color:'+(r.resumen.ips_sospechosas>0?'#d29922':'#3fb950')+'">'+r.resumen.ips_sospechosas+'</div><div class="stat-l">IPs sospechosas</div></div><div class="stat-card"><div class="stat-n" style="color:#8b949e">'+Object.keys(r.actividad_por_hora||{}).length+'</div><div class="stat-l">Horas con actividad</div></div></div>';
+    if (r.actividad_por_hora && Object.keys(r.actividad_por_hora).length>0) {
+        var horas=r.actividad_por_hora; var maxV=Math.max.apply(null,Object.values(horas));
+        html+='<div class="sec-titulo">&#128200; Actividad por hora</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:16px"><div class="hora-chart">';
+        for(var h=0;h<24;h++){var hs=h<10?'0'+h:''+h;var v=horas[hs]||0;var pct=maxV>0?Math.max(4,Math.round((v/maxV)*56)):4;var col=v>maxV*0.7?'#f85149':v>maxV*0.4?'#d29922':'#1f6feb';html+='<div class="hora-bar-wrap"><div class="hora-bar" style="height:'+pct+'px;background:'+col+'" title="'+hs+':00 - '+v+' eventos"></div><div class="hora-label">'+(h%6===0?hs:'')+'</div></div>';}
+        html+='</div></div>';
+    }
+    if (r.amenazas.length>0) {
+        html+='<div class="sec-titulo">&#128680; Amenazas encontradas</div>';
+        r.amenazas.forEach(function(a){var det=a.detalle.map(function(d){return 'Linea '+d.linea+': '+d.contenido;}).join('\n');html+='<div class="item"><div class="item-header"><span class="item-titulo">'+a.tipo+'</span><span class="badge-n badge-'+a.nivel+'">'+a.nivel+'</span></div><div class="item-desc">'+a.cantidad+' ocurrencias detectadas</div><div class="item-detalle">'+det+'</div></div>';});
+    } else { html+='<div class="no-data" style="color:#3fb950">&#10003; No se detectaron amenazas</div>'; }
+    if (r.ips_sospechosas.length>0) {
+        html+='<div class="sec-titulo">&#127758; IPs sospechosas</div>';
+        r.ips_sospechosas.forEach(function(ip){html+='<div class="item"><div class="item-header"><span class="item-titulo" style="font-family:monospace">'+ip.ip+'</span><span class="badge-n badge-'+ip.nivel+'">'+ip.nivel+'</span></div><div class="item-desc">'+ip.apariciones+' apariciones en el log</div></div>';});
+    }
+    div.innerHTML=html; div.style.display='block';
+}
+
+function mostrarPuertos(r) {
+    var div = document.getElementById('result-puertos');
+    if (r.error){div.innerHTML='<div class="no-data" style="color:#f85149;border-color:#f85149">Error: '+r.error+'</div>';div.style.display='block';return;}
+    var n=r.resumen.nivel_riesgo;
+    var html='<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128268;</div><div><div class="nivel-label">Escaneo — '+r.host+' ('+r.ip+')</div><div class="nivel-texto">'+n+'</div></div></div>';
+    html+='<div class="stats-grid stats-grid-3"><div class="stat-card"><div class="stat-n">'+r.resumen.total_verificados+'</div><div class="stat-l">Verificados</div></div><div class="stat-card"><div class="stat-n" style="color:'+(r.resumen.total_abiertos>0?'#d29922':'#3fb950')+'">'+r.resumen.total_abiertos+'</div><div class="stat-l">Abiertos</div></div><div class="stat-card"><div class="stat-n" style="color:'+(r.resumen.total_peligrosos>0?'#f85149':'#3fb950')+'">'+r.resumen.total_peligrosos+'</div><div class="stat-l">Peligrosos</div></div></div>';
+    if (r.puertos_abiertos.length>0){
+        html+='<div class="sec-titulo">&#128308; Puertos abiertos</div><div class="puertos-grid">';
+        r.puertos_abiertos.forEach(function(p){var cls=p.peligroso?'puerto-mal':'puerto-ok';var tag=p.peligroso?'<span class="tag tag-mal">RIESGO</span>':'<span class="tag tag-ok">OK</span>';html+='<div class="puerto '+cls+'"><div><div class="p-num">:'+p.puerto+'</div><div class="p-svc">'+p.servicio+'</div></div>'+tag+'</div>';});
+        html+='</div>';
+    } else { html+='<div class="no-data" style="color:#3fb950;border-color:#3fb950">&#10003; Sin puertos abiertos</div>'; }
+    if (r.recomendaciones&&r.recomendaciones.length>0){
+        html+='<div class="sec-titulo">&#9888; Recomendaciones</div>';
+        r.recomendaciones.forEach(function(rec){html+='<div class="item"><div class="item-header"><span class="item-titulo">Puerto :'+rec.puerto+' — '+rec.servicio+'</span><span class="badge-n badge-ALTO">RIESGO</span></div><div class="item-rec">&#128161; '+rec.recomendacion+'</div></div>';});
+    }
+    div.innerHTML=html; div.style.display='block';
+}
+
+function mostrarHeaders(r) {
+    var div = document.getElementById('result-headers');
+    if (r.error){div.innerHTML='<div class="no-data" style="color:#f85149;border-color:#f85149">Error: '+r.error+'</div>';div.style.display='block';return;}
+    var n=r.resumen.nivel_riesgo; var pts=r.resumen.puntuacion;
+    var fillCls=n==='ALTO'?'bar-alto':n==='MEDIO'?'bar-medio':'bar-bajo';
+    var html='<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128274;</div><div style="flex:1"><div class="nivel-label">Analisis — '+r.url+'</div><div class="nivel-texto">'+n+'</div><div class="bar-wrap"><div class="bar-fill '+fillCls+'" style="width:'+pts+'%"></div></div><div style="font-size:11px;color:#8b949e">Puntuacion: '+pts+'/100 — '+r.resumen.presentes+' de '+r.resumen.total+' headers</div></div></div>';
+    html+='<div class="stats-grid stats-grid-3"><div class="stat-card"><div class="stat-n" style="color:#3fb950">'+r.resumen.presentes+'</div><div class="stat-l">Presentes</div></div><div class="stat-card"><div class="stat-n" style="color:#f85149">'+r.resumen.faltantes+'</div><div class="stat-l">Faltantes</div></div><div class="stat-card"><div class="stat-n">'+pts+'</div><div class="stat-l">Puntuacion</div></div></div>';
+    if (r.ssl_info){var ssl=r.ssl_info;html+='<div class="sec-titulo">&#128272; Certificado SSL</div>';if(ssl.valido){html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">&#10003; Certificado valido</span><span class="badge-n badge-'+(ssl.dias_restantes<30?'MEDIO':'BAJO')+'">'+(ssl.dias_restantes<30?'EXPIRA PRONTO':'VIGENTE')+'</span></div><div class="ssl-grid"><div class="ssl-item"><div class="k">Expira</div><div class="v">'+ssl.expira+'</div></div><div class="ssl-item"><div class="k">Dias restantes</div><div class="v">'+ssl.dias_restantes+' dias</div></div></div></div>';}else{html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">&#10007; SSL no disponible</span><span class="badge-n badge-ALTO">ALTO</span></div><div class="item-desc">'+(ssl.error||'No se pudo verificar')+'</div></div>';}}
+    html+='<div class="sec-titulo">&#128279; Redireccion HTTPS</div><div class="item" style="border-left:3px solid '+(r.redireccion_https?'#3fb950':'#f85149')+'"><div class="item-header"><span class="item-titulo">'+(r.redireccion_https?'&#10003; Redirige a HTTPS correctamente':'&#10007; No redirige a HTTPS')+'</span><span class="badge-n badge-'+(r.redireccion_https?'BAJO':'ALTO')+'">'+(r.redireccion_https?'OK':'RIESGO')+'</span></div></div>';
+    if (r.headers_presentes.length>0){html+='<div class="sec-titulo">&#10003; Headers presentes</div>';r.headers_presentes.forEach(function(h){html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">'+h.header+'</span><span class="badge-n badge-OK">OK</span></div><div class="item-desc">'+h.descripcion+'</div><div class="item-valor">'+h.valor.substring(0,120)+(h.valor.length>120?'...':'')+'</div></div>';});}
+    if (r.headers_faltantes.length>0){html+='<div class="sec-titulo">&#10007; Headers faltantes</div>';r.headers_faltantes.forEach(function(h){html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">'+h.header+'</span><span class="badge-n badge-'+h.nivel+'">'+h.nivel+'</span></div><div class="item-desc">'+h.descripcion+'</div><div class="item-rec">&#128161; '+h.recomendacion+'</div></div>';});}
+    div.innerHTML=html; div.style.display='block';
+}
+</script>
+</body>
+</html>

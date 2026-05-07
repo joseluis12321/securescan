@@ -1,0 +1,10 @@
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('', views.home, name='home'),
+    path('analizar/', views.analizar, name='analizar'),
+    path('escanear/', views.escanear_puertos, name='escanear'),
+    path('headers/', views.verificar_headers, name='headers'),
+    path('exportar-pdf/', views.exportar_pdf, name='exportar_pdf'),
+]
