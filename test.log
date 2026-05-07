@@ -1,5 +1,0 @@
-192.168.1.105 - - [07/May/2026:10:23:01] "GET /admin HTTP/1.1" 404 512
-192.168.1.105 - - [07/May/2026:10:23:02] "GET /wp-login.php HTTP/1.1" 404 512
-Failed password for root from 203.0.113.42 port 22 ssh2
-Failed password for admin from 203.0.113.42 port 22 ssh2
-authentication failure; user=root from 10.0.0.5
