@@ -1,11 +1,12 @@
 import json
+import logging
 import re
 from functools import wraps
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.http import HttpResponse, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_GET, require_POST
@@ -17,7 +18,9 @@ from .header_checker import verificar_headers as _verificar_headers
 from .models import Analisis
 from .pdf_generator import generar_reporte_pdf
 from .port_scanner import escanear_host
-from .seguridad import EntradaInvalida
+from .seguridad import EntradaInvalida, ObjetivoNoPermitido
+
+logger = logging.getLogger(__name__)
 
 # .log, .txt y logs rotados como access.log.1
 EXTENSIONES_LOG = re.compile(r"\.(log|txt)(\.\d+)?$", re.IGNORECASE)
@@ -37,6 +40,8 @@ def vista_api(vista):
     - Exige sesión iniciada (401 en JSON en vez de redirigir al login).
     - Convierte EntradaInvalida en una respuesta de error con su código.
     - Convierte el límite de peticiones superado en un 429.
+    - Registra los eventos de seguridad y devuelve los errores inesperados como
+      JSON sin filtrar detalles internos.
     """
     @wraps(vista)
     def envoltura(request, *args, **kwargs):
@@ -44,13 +49,24 @@ def vista_api(vista):
             return JsonResponse({"error": "Debes iniciar sesión"}, status=401)
         try:
             return vista(request, *args, **kwargs)
+        except ObjetivoNoPermitido as e:
+            logger.warning("SSRF bloqueado: usuario=%s vista=%s: %s",
+                           request.user.pk, vista.__name__, e)
+            return JsonResponse({"error": str(e)}, status=e.status)
         except EntradaInvalida as e:
             return JsonResponse({"error": str(e)}, status=e.status)
         except Ratelimited:
+            logger.warning("Límite de peticiones superado: usuario=%s vista=%s",
+                           request.user.pk, vista.__name__)
             return JsonResponse(
                 {"error": "Demasiadas peticiones. Espera un minuto e inténtalo de nuevo."},
                 status=429,
             )
+        except Http404:
+            raise
+        except Exception:
+            logger.exception("Error inesperado en %s", vista.__name__)
+            return JsonResponse({"error": "Error interno del servidor"}, status=500)
     return envoltura
 
 
@@ -113,6 +129,7 @@ class LoginConLimite(LoginView):
 
     def post(self, request, *args, **kwargs):
         if getattr(request, "limited", False):
+            logger.warning("Login bloqueado por límite de intentos: ip=%s", request.META.get("REMOTE_ADDR"))
             contexto = self.get_context_data(form=self.get_form_class()(request), limitado=True)
             return self.render_to_response(contexto, status=429)
         return super().post(request, *args, **kwargs)

@@ -79,6 +79,8 @@
         .puerto-mal { background: #2d1117; border: 1px solid #f85149; }
         .p-num { font-family: monospace; font-size: 15px; font-weight: 700; color: #58a6ff; }
         .p-svc { font-size: 11px; color: #8b949e; }
+        .p-banner { font-size: 10px; color: #6e7681; font-family: monospace; margin-top: 3px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .badge-WARN { background: #d2992222; color: #d29922; border: 1px solid #d29922; }
         .tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
         .tag-mal { background: #f8514922; color: #f85149; border: 1px solid #f85149; }
         .tag-ok { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
@@ -166,7 +168,7 @@
     <div class="panel" id="panel-headers">
         <div class="hero">
             <h2>Verificador de <span>Headers HTTP</span></h2>
-            <p>Analiza 8 headers de seguridad, certificado SSL y redireccion HTTPS</p>
+            <p>Analiza 7 headers de seguridad y sus valores, cookies, fugas de informacion, certificado TLS y redireccion HTTPS</p>
         </div>
         <div class="card">
             <h3>Sitio web a analizar</h3>
@@ -354,14 +356,14 @@ function mostrarLogs(r) {
     if (amenazas.length>0) {
         html+='<div class="sec-titulo">&#128680; Amenazas encontradas</div>';
         amenazas.forEach(function(a){
-            var det=(a.detalle||[]).map(function(d){return 'Linea '+num(d.linea)+': '+esc(d.contenido);}).join('\n');
+            var det=(a.detalle||[]).map(function(d){return (d.linea?'Linea '+num(d.linea)+': ':'')+esc(d.contenido);}).join('\n');
             html+='<div class="item"><div class="item-header"><span class="item-titulo">'+esc(a.tipo)+'</span><span class="badge-n badge-'+nc(a.nivel)+'">'+esc(a.nivel)+'</span></div><div class="item-desc">'+num(a.cantidad)+' ocurrencias detectadas</div><div class="item-detalle">'+det+'</div></div>';
         });
     } else { html+='<div class="no-data" style="color:#3fb950">&#10003; No se detectaron amenazas</div>'; }
     var ips = r.ips_sospechosas || [];
     if (ips.length>0) {
         html+='<div class="sec-titulo">&#127758; IPs sospechosas</div>';
-        ips.forEach(function(ip){html+='<div class="item"><div class="item-header"><span class="item-titulo" style="font-family:monospace">'+esc(ip.ip)+'</span><span class="badge-n badge-'+nc(ip.nivel)+'">'+esc(ip.nivel)+'</span></div><div class="item-desc">'+num(ip.apariciones)+' apariciones en el log</div></div>';});
+        ips.forEach(function(ip){html+='<div class="item"><div class="item-header"><span class="item-titulo" style="font-family:monospace">'+esc(ip.ip)+'</span><span class="badge-n badge-'+nc(ip.nivel)+'">'+esc(ip.nivel)+'</span></div><div class="item-desc">'+num(ip.apariciones)+' apariciones · '+num(ip.eventos_maliciosos)+' peticiones maliciosas · '+num(ip.fallos_login)+' logins fallidos</div></div>';});
     }
     div.innerHTML=html; div.style.display='block';
 }
@@ -375,7 +377,7 @@ function mostrarPuertos(r) {
     var abiertos = r.puertos_abiertos || [];
     if (abiertos.length>0){
         html+='<div class="sec-titulo">&#128308; Puertos abiertos</div><div class="puertos-grid">';
-        abiertos.forEach(function(p){var cls=p.peligroso?'puerto-mal':'puerto-ok';var tag=p.peligroso?'<span class="tag tag-mal">RIESGO</span>':'<span class="tag tag-ok">OK</span>';html+='<div class="puerto '+cls+'"><div><div class="p-num">:'+num(p.puerto)+'</div><div class="p-svc">'+esc(p.servicio)+'</div></div>'+tag+'</div>';});
+        abiertos.forEach(function(p){var cls=p.peligroso?'puerto-mal':'puerto-ok';var tag=p.peligroso?'<span class="tag tag-mal">RIESGO</span>':'<span class="tag tag-ok">OK</span>';html+='<div class="puerto '+cls+'"><div><div class="p-num">:'+num(p.puerto)+'</div><div class="p-svc">'+esc(p.servicio)+'</div>'+(p.banner?'<div class="p-banner" title="'+esc(p.banner)+'">'+esc(p.banner)+'</div>':'')+'</div>'+tag+'</div>';});
         html+='</div>';
     } else { html+='<div class="no-data" style="color:#3fb950;border-color:#3fb950">&#10003; Sin puertos abiertos</div>'; }
     var recs = r.recomendaciones || [];
@@ -397,14 +399,17 @@ function mostrarHeaders(r) {
     if (r.ssl_info){
         var ssl=r.ssl_info; var dias=num(ssl.dias_restantes);
         html+='<div class="sec-titulo">&#128272; Certificado SSL</div>';
-        if(ssl.valido){html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">&#10003; Certificado valido</span><span class="badge-n badge-'+(dias<30?'MEDIO':'BAJO')+'">'+(dias<30?'EXPIRA PRONTO':'VIGENTE')+'</span></div><div class="ssl-grid"><div class="ssl-item"><div class="k">Expira</div><div class="v">'+esc(ssl.expira)+'</div></div><div class="ssl-item"><div class="k">Dias restantes</div><div class="v">'+dias+' dias</div></div></div></div>';}
+        if(ssl.valido){html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">&#10003; Certificado valido</span><span class="badge-n badge-'+(dias<30?'MEDIO':'BAJO')+'">'+(dias<30?'EXPIRA PRONTO':'VIGENTE')+'</span></div><div class="ssl-grid"><div class="ssl-item"><div class="k">Expira</div><div class="v">'+esc(ssl.expira)+'</div></div><div class="ssl-item"><div class="k">Dias restantes</div><div class="v">'+dias+' dias</div></div><div class="ssl-item"><div class="k">Version TLS</div><div class="v">'+esc(ssl.version_tls||'—')+'</div></div><div class="ssl-item"><div class="k">Emisor</div><div class="v">'+esc((ssl.emisor||{}).organizationName||'—')+'</div></div></div></div>';}
         else{html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">&#10007; SSL no disponible</span><span class="badge-n badge-ALTO">ALTO</span></div><div class="item-desc">'+esc(ssl.error||'No se pudo verificar')+'</div></div>';}
     }
-    html+='<div class="sec-titulo">&#128279; Redireccion HTTPS</div><div class="item" style="border-left:3px solid '+(r.redireccion_https?'#3fb950':'#f85149')+'"><div class="item-header"><span class="item-titulo">'+(r.redireccion_https?'&#10003; Redirige a HTTPS correctamente':'&#10007; No redirige a HTTPS')+'</span><span class="badge-n badge-'+(r.redireccion_https?'BAJO':'ALTO')+'">'+(r.redireccion_https?'OK':'RIESGO')+'</span></div></div>';
+    var rd=r.redireccion_https; var rdOk=rd!==false; var rdTxt=rd===true?'&#10003; Redirige de HTTP a HTTPS correctamente':rd===false?'&#10007; HTTP no redirige a HTTPS':'&#10003; HTTP (puerto 80) no disponible: solo HTTPS';
+    html+='<div class="sec-titulo">&#128279; Redireccion HTTPS</div><div class="item" style="border-left:3px solid '+(rdOk?'#3fb950':'#f85149')+'"><div class="item-header"><span class="item-titulo">'+rdTxt+'</span><span class="badge-n badge-'+(rdOk?'BAJO':'ALTO')+'">'+(rdOk?'OK':'RIESGO')+'</span></div></div>';
     var presentes = r.headers_presentes || [];
-    if (presentes.length>0){html+='<div class="sec-titulo">&#10003; Headers presentes</div>';presentes.forEach(function(h){var valor=String(h.valor||'');html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">'+esc(h.header)+'</span><span class="badge-n badge-OK">OK</span></div><div class="item-desc">'+esc(h.descripcion)+'</div><div class="item-valor">'+esc(valor.substring(0,120))+(valor.length>120?'...':'')+'</div></div>';});}
+    if (presentes.length>0){html+='<div class="sec-titulo">&#10003; Headers presentes</div>';presentes.forEach(function(h){var valor=String(h.valor||'');html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">'+esc(h.header)+'</span>'+(h.advertencia?'<span class="badge-n badge-WARN">MEJORABLE</span>':'<span class="badge-n badge-OK">OK</span>')+'</div><div class="item-desc">'+esc(h.descripcion)+'</div><div class="item-valor">'+esc(valor.substring(0,120))+(valor.length>120?'...':'')+'</div>'+(h.advertencia?'<div class="item-rec">&#9888; '+esc(h.advertencia)+'<br>&#128161; '+esc(h.recomendacion)+'</div>':'')+'</div>';});}
     var faltantes = r.headers_faltantes || [];
     if (faltantes.length>0){html+='<div class="sec-titulo">&#10007; Headers faltantes</div>';faltantes.forEach(function(h){html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">'+esc(h.header)+'</span><span class="badge-n badge-'+nc(h.nivel)+'">'+esc(h.nivel)+'</span></div><div class="item-desc">'+esc(h.descripcion)+'</div><div class="item-rec">&#128161; '+esc(h.recomendacion)+'</div></div>';});}
+    var adv = r.advertencias || [];
+    if (adv.length>0){html+='<div class="sec-titulo">&#9888; Otras advertencias</div>';adv.forEach(function(a){html+='<div class="item"><div class="item-header"><span class="item-titulo">'+esc(a.tipo)+' — '+esc(a.header)+'</span><span class="badge-n badge-WARN">AVISO</span></div><div class="item-valor">'+esc(a.valor)+'</div><div class="item-desc">'+esc(a.detalle)+'</div><div class="item-rec">&#128161; '+esc(a.recomendacion)+'</div></div>';});}
     div.innerHTML=html; div.style.display='block';
 }
 </script>
