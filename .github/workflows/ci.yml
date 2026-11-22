@@ -73,7 +73,14 @@ jobs:
           DEBUG: "False"
           ALLOWED_HOSTS: securescan.ejemplo.com
           CACHE_URL: redis://localhost:6379/0
-        run: python manage.py check --deploy --fail-level WARNING
+        # La SECRET_KEY global del CI es corta a propósito y dispara security.W009.
+        # Aquí se genera una clave aleatoria y desechable solo para esta comprobación:
+        # no se guarda en ningún sitio y se oculta en los logs.
+        run: |
+          SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+          echo "::add-mask::${SECRET_KEY}"
+          export SECRET_KEY
+          python manage.py check --deploy --fail-level WARNING
 
   docker:
     name: Build de la imagen
