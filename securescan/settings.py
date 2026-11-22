@@ -7,9 +7,11 @@ prioridad sobre el archivo .env.
 Docs: https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import sys
 from pathlib import Path
 
 import environ
+from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,6 +47,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -152,6 +156,23 @@ if env.bool('BEHIND_PROXY', default=False):
     # compartirían la IP del proxy).
     RATELIMIT_IP_META_KEY = 'HTTP_X_REAL_IP'
 
+# El healthcheck interno de Docker usa HTTP plano.
+SECURE_REDIRECT_EXEMPT = [r'^salud/$']
+
+# Content Security Policy estricta: sin JS ni CSS inline, sin recursos externos.
+SECURE_CSP = {
+    'default-src': [CSP.SELF],
+    'script-src': [CSP.SELF],
+    'style-src': [CSP.SELF],
+    'img-src': [CSP.SELF, 'data:'],
+    'connect-src': [CSP.SELF],
+    'font-src': [CSP.SELF],
+    'object-src': [CSP.NONE],
+    'base-uri': [CSP.SELF],
+    'form-action': [CSP.SELF],
+    'frame-ancestors': [CSP.NONE],
+}
+
 # Límite del cuerpo de peticiones que no son archivos (JSON de la API).
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024
 
@@ -167,6 +188,23 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+if DEBUG:
+    # En desarrollo no hace falta collectstatic: WhiteNoise usa los finders.
+    import warnings
+
+    warnings.filterwarnings('ignore', message='No directory at', category=UserWarning)
+
+# En producción WhiteNoise sirve los estáticos comprimidos y con hash en el
+# nombre (caché de larga duración). Requiere ejecutar collectstatic.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'
+        if DEBUG
+        else 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -194,6 +232,16 @@ LOGGING = {
         },
     },
 }
+
+
+# Durante los tests solo se muestran errores críticos (assertLogs sigue
+# capturando los mensajes que cada test comprueba).
+TESTING = 'test' in sys.argv[1:2] or 'pytest' in sys.modules
+if TESTING:
+    for _logger in LOGGING['loggers'].values():
+        _logger['level'] = 'CRITICAL'
+    # Hash rápido: los tests crean usuarios y hacen login muchas veces.
+    PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
 
 # ---------------------------------------------------------------------------

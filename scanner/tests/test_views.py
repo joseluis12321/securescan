@@ -11,6 +11,10 @@ from django.urls import reverse
 from scanner.models import Analisis
 from scanner.port_scanner import ServidorOcupado
 
+# django-ratelimit usa ventanas fijas de tiempo: si un test cruza el borde de
+# una ventana el contador se reinicia y el test falla de forma intermitente.
+VENTANA_FIJA = mock.patch("django_ratelimit.core._get_window", return_value=1_800_000_000)
+
 LOG_XSS = b'1.2.3.4 - - [07/May/2026:10:23:01] "GET /?q=<script>alert(1)</script> HTTP/1.1" 200 1\n'
 
 
@@ -23,8 +27,7 @@ class VistasTests(TestCase):
         self.client.force_login(self.usuario)
 
     def post_json(self, nombre, datos, client=None, **extra):
-        return (client or self.client).post(
-            reverse(nombre), datos, content_type="application/json", **extra)
+        return (client or self.client).post(reverse(nombre), datos, content_type="application/json", **extra)
 
     # --- autenticación ---
     def test_home_requiere_login(self):
@@ -39,10 +42,13 @@ class VistasTests(TestCase):
         r = Client().post(reverse("login"), {"username": "ana", "password": "clave-segura-123"})
         self.assertRedirects(r, reverse("home"), fetch_redirect_response=False)
 
-    def test_login_limita_fuerza_bruta(self):
+    @VENTANA_FIJA
+    def test_login_limita_fuerza_bruta(self, _):
         c = Client()
         for _ in range(5):
-            self.assertEqual(c.post(reverse("login"), {"username": "ana", "password": "mal"}).status_code, 200)
+            self.assertEqual(
+                c.post(reverse("login"), {"username": "ana", "password": "mal"}).status_code, 200
+            )
         r = c.post(reverse("login"), {"username": "ana", "password": "clave-segura-123"})
         self.assertEqual(r.status_code, 429)
         self.assertContains(r, "Demasiados intentos", status_code=429)
@@ -107,7 +113,9 @@ class VistasTests(TestCase):
         self.assertEqual(r.status_code, 400)
 
     def test_subida_archivo_binario(self):
-        r = self.client.post(reverse("analizar"), {"archivo_log": SimpleUploadedFile("a.log", b"\x7fELF\x00\x01")})
+        r = self.client.post(
+            reverse("analizar"), {"archivo_log": SimpleUploadedFile("a.log", b"\x7fELF\x00\x01")}
+        )
         self.assertEqual(r.status_code, 400)
 
     @override_settings(SECURESCAN_MAX_LOG_MB=0.001)  # ~1 KB
@@ -118,7 +126,10 @@ class VistasTests(TestCase):
     # --- PDF desde la base de datos ---
     def _analisis(self, usuario):
         return Analisis.objects.create(
-            usuario=usuario, tipo="logs", objetivo="a.log", nivel_riesgo="BAJO",
+            usuario=usuario,
+            tipo="logs",
+            objetivo="a.log",
+            nivel_riesgo="BAJO",
             resultado={"resumen": {"nivel_riesgo": "BAJO"}, "amenazas": [], "ips_sospechosas": []},
         )
 
@@ -138,7 +149,8 @@ class VistasTests(TestCase):
         self.assertEqual(self.client.post(reverse("exportar_pdf", args=[pk])).status_code, 405)
 
     # --- límite de peticiones ---
-    def test_rate_limit_escaneo(self):
+    @VENTANA_FIJA
+    def test_rate_limit_escaneo(self, _):
         for _ in range(10):
             self.assertEqual(self.post_json("escanear", {"host": "127.0.0.1"}).status_code, 400)
         self.assertEqual(self.post_json("escanear", {"host": "127.0.0.1"}).status_code, 429)
@@ -166,7 +178,9 @@ class VistasTests(TestCase):
                 self.assertEqual(self.post_json("escanear", datos).status_code, 400)
 
     def test_log_rotado_aceptado(self):
-        r = self.client.post(reverse("analizar"), {"archivo_log": SimpleUploadedFile("access.log.1", LOG_XSS)})
+        r = self.client.post(
+            reverse("analizar"), {"archivo_log": SimpleUploadedFile("access.log.1", LOG_XSS)}
+        )
         self.assertEqual(r.status_code, 200)
 
     def test_pdf_de_cada_tipo(self):
@@ -176,3 +190,51 @@ class VistasTests(TestCase):
                 r = self.client.get(reverse("exportar_pdf", args=[a.pk]))
                 self.assertEqual(r.status_code, 200)
                 self.assertIn(f"securescan_{tipo}_{a.pk}.pdf", r["Content-Disposition"])
+
+
+class PaginasTests(TestCase):
+    """Plantillas, estáticos, CSP y healthcheck."""
+
+    def setUp(self):
+        cache.clear()
+        self.usuario = get_user_model().objects.create_user("ana", password="clave-segura-123")
+
+    def test_home_con_csp_estricta_y_sin_inline(self):
+        self.client.force_login(self.usuario)
+        r = self.client.get(reverse("home"))
+        csp = r["Content-Security-Policy"]
+        self.assertIn("script-src 'self'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertNotIn("unsafe-inline", csp)
+        html = r.content.decode()
+        self.assertNotIn("onclick=", html)
+        self.assertNotIn("style=", html)
+        self.assertIn('id="config-securescan" type="application/json"', html)
+        self.assertEqual(r.context["config"]["urls"]["escanear"], reverse("escanear"))
+
+    def test_login_sin_inline(self):
+        html = self.client.get(reverse("login")).content.decode()
+        self.assertNotIn("<style>", html)
+        self.assertNotIn("style=", html)
+
+    def test_estaticos_existen(self):
+        from django.contrib.staticfiles import finders
+
+        for ruta in ("scanner/css/app.css", "scanner/js/app.js"):
+            with self.subTest(ruta=ruta):
+                self.assertIsNotNone(finders.find(ruta))
+
+    def test_pagina_404_propia(self):
+        r = self.client.get("/no-existe/")
+        self.assertEqual(r.status_code, 404)
+        self.assertContains(r, "La página que buscas no existe", status_code=404)
+
+    def test_salud(self):
+        r = Client().get(reverse("salud"))
+        self.assertEqual((r.status_code, r.json()), (200, {"estado": "ok"}))
+
+    @mock.patch("scanner.views.connection.ensure_connection", side_effect=RuntimeError("bd caída"))
+    def test_salud_con_fallo(self, _):
+        with self.assertLogs("scanner.views", level="ERROR"):
+            r = Client().get(reverse("salud"))
+        self.assertEqual((r.status_code, r.json()), (503, {"estado": "error"}))

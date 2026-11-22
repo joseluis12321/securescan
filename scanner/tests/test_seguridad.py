@@ -26,15 +26,28 @@ def _resolver_que_permite_127(host, puerto=None, _original=seguridad.resolver_ip
 
 
 class ResolverIpPublicaTests(SimpleTestCase):
-    INTERNAS = [
-        "127.0.0.1", "127.1", "2130706433", "0x7f000001", "localhost", "0.0.0.0", "0",
-        "10.0.0.5", "172.16.0.1", "192.168.1.1", "100.64.0.1",
-        "169.254.169.254",          # metadatos de AWS/GCP/Azure
-        "224.0.0.1", "255.255.255.255",
-        "::1", "::", "fe80::1", "fc00::1",
-        "::ffff:127.0.0.1",         # IPv4 mapeada en IPv6
-        "2002:7f00:1::1",           # 6to4 que encapsula 127.0.0.1
-    ]
+    INTERNAS = (
+        "127.0.0.1",
+        "127.1",
+        "2130706433",
+        "0x7f000001",
+        "localhost",
+        "0.0.0.0",
+        "0",
+        "10.0.0.5",
+        "172.16.0.1",
+        "192.168.1.1",
+        "100.64.0.1",
+        "169.254.169.254",  # metadatos de AWS/GCP/Azure
+        "224.0.0.1",
+        "255.255.255.255",
+        "::1",
+        "::",
+        "fe80::1",
+        "fc00::1",
+        "::ffff:127.0.0.1",  # IPv4 mapeada en IPv6
+        "2002:7f00:1::1",  # 6to4 que encapsula 127.0.0.1
+    )
 
     def test_bloquea_direcciones_internas(self):
         for host in self.INTERNAS:
@@ -58,9 +71,8 @@ class ResolverIpPublicaTests(SimpleTestCase):
     def test_rechaza_si_alguna_ip_es_interna(self):
         """Un dominio con un registro público y otro privado se rechaza entero."""
         infos = [(2, 1, 6, "", ("8.8.8.8", 0)), (2, 1, 6, "", ("10.0.0.1", 0))]
-        with mock.patch("socket.getaddrinfo", return_value=infos):
-            with self.assertRaises(ObjetivoNoPermitido):
-                resolver_ip_publica("mixto.example")
+        with mock.patch("socket.getaddrinfo", return_value=infos), self.assertRaises(ObjetivoNoPermitido):
+            resolver_ip_publica("mixto.example")
 
     def test_prefiere_ipv4(self):
         infos = [(10, 1, 6, "", ("2001:4860:4860::8888", 0, 0, 0)), (2, 1, 6, "", ("8.8.8.8", 0))]
@@ -93,8 +105,16 @@ class NormalizarUrlTests(SimpleTestCase):
         self.assertEqual(normalizar_url("http://x.com:8080/")[2], 443)
 
     def test_rechaza_urls_peligrosas_o_invalidas(self):
-        for url in [None, "", "file:///etc/passwd", "ftp://example.com", "gopher://x",
-                    "https://:80", "https://x:abc/", "https://" + "a" * 3000]:
+        for url in [
+            None,
+            "",
+            "file:///etc/passwd",
+            "ftp://example.com",
+            "gopher://x",
+            "https://:80",
+            "https://x:abc/",
+            "https://" + "a" * 3000,
+        ]:
             with self.subTest(url=url), self.assertRaises(EntradaInvalida):
                 normalizar_url(url)
 
@@ -110,25 +130,31 @@ class ClienteHTTPSeguroTests(SimpleTestCase):
         """El primer salto se permite (simulado como público); la redirección no."""
         respuestas = {"/": (302, {"Location": "http://localhost:{puerto}/secreto"})}
         with ServidorHTTPPrueba(respuestas) as srv:
-            with mock.patch.object(seguridad, "resolver_ip_publica", side_effect=_resolver_que_permite_127):
-                with self.assertRaises(ObjetivoNoPermitido):
-                    obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
+            with (
+                mock.patch.object(seguridad, "resolver_ip_publica", side_effect=_resolver_que_permite_127),
+                self.assertRaises(ObjetivoNoPermitido),
+            ):
+                obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
             self.assertEqual(srv.rutas, ["/"])
 
     def test_redireccion_a_otro_esquema_bloqueada(self):
         for destino in ["ftp://127.0.0.1/archivo", "file:///etc/passwd"]:
             respuestas = {"/": (302, {"Location": destino})}
             with self.subTest(destino=destino), ServidorHTTPPrueba(respuestas) as srv:
-                with mock.patch.object(seguridad, "resolver_ip_publica", return_value="127.0.0.1"):
-                    with self.assertRaises(urllib.error.HTTPError):
-                        obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
+                with (
+                    mock.patch.object(seguridad, "resolver_ip_publica", return_value="127.0.0.1"),
+                    self.assertRaises(urllib.error.HTTPError),
+                ):
+                    obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
 
     def test_bucle_de_redirecciones_se_corta(self):
         respuestas = {"/": (302, {"Location": "/"})}
         with ServidorHTTPPrueba(respuestas) as srv:
-            with mock.patch.object(seguridad, "resolver_ip_publica", return_value="127.0.0.1"):
-                with self.assertRaises(urllib.error.HTTPError):
-                    obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
+            with (
+                mock.patch.object(seguridad, "resolver_ip_publica", return_value="127.0.0.1"),
+                self.assertRaises(urllib.error.HTTPError),
+            ):
+                obtener(f"http://127.0.0.1:{srv.puerto}/", timeout=2)
             self.assertLessEqual(len(srv.rutas), 11)
 
     def test_respuesta_de_error_devuelve_headers(self):

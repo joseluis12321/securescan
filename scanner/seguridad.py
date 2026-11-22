@@ -56,7 +56,7 @@ def resolver_ip_publica(host: str, puerto: int | None = None) -> str:
         raise EntradaInvalida(f"No se pudo resolver el host: {host}") from e
 
     ips = []
-    for familia, _tipo, _proto, _canon, sockaddr in infos:
+    for _familia, _tipo, _proto, _canon, sockaddr in infos:
         ip = ipaddress.ip_address(sockaddr[0].split("%")[0])
         if ip not in ips:
             ips.append(ip)
@@ -77,8 +77,7 @@ def resolver_ip_publica(host: str, puerto: int | None = None) -> str:
     return str(ips[0])
 
 
-def crear_conexion_segura(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT,
-                          source_address=None, **kwargs):
+def crear_conexion_segura(address, timeout=socket._GLOBAL_DEFAULT_TIMEOUT, source_address=None, **kwargs):
     """Sustituto de `socket.create_connection` que valida la IP antes de conectar.
 
     Se usa en las conexiones HTTP salientes para que también las redirecciones

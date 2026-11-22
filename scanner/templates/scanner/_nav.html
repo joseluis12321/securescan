@@ -1,0 +1,11 @@
+<nav>
+    <a class="logo" href="{% url 'home' %}">Secure<span>Scan</span></a>
+    <div class="badge">v2.0 Defensivo</div>
+    <div class="nav-enlaces">
+        <a href="{% url 'home' %}"{% if request.resolver_match.url_name == 'home' %} class="activo"{% endif %}>Análisis</a>
+    </div>
+    <div class="usuario">
+        <span>&#128100; {{ user.get_username }}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-gris btn-peq" type="submit">Cerrar sesión</button></form>
+    </div>
+</nav>

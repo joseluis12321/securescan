@@ -1,47 +1,28 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Iniciar sesión — SecureScan</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; background: #0a0e1a; color: #e0e6f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
-        .card { background: #0d1117; border: 1px solid #21262d; border-radius: 14px; padding: 36px 32px; width: 100%; max-width: 380px; }
-        .logo { font-size: 26px; font-weight: 700; color: #58a6ff; text-align: center; margin-bottom: 4px; }
-        .logo span { color: #3fb950; }
-        .sub { text-align: center; color: #8b949e; font-size: 13px; margin-bottom: 26px; }
-        label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 6px; }
-        input { width: 100%; background: #010409; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; color: #e0e6f0; font-size: 14px; outline: none; margin-bottom: 16px; }
-        input:focus { border-color: #58a6ff; }
-        button { width: 100%; border: none; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; background: #1f6feb; color: #fff; }
-        button:hover { opacity: 0.85; }
-        .error { background: #2d1117; border: 1px solid #f85149; color: #f85149; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
-        .aviso { margin-top: 20px; font-size: 11px; color: #6e7681; text-align: center; line-height: 1.5; }
-    </style>
-</head>
-<body>
-<div class="card">
-    <div class="logo">Secure<span>Scan</span></div>
-    <div class="sub">Herramienta de ciberseguridad defensiva</div>
+{% extends "scanner/base.html" %}
+{% block titulo %}Iniciar sesión{% endblock %}
+{% block body %}
+<main class="centrado">
+    <div class="card-login">
+        <span class="logo">Secure<span>Scan</span></span>
+        <div class="sub">Herramienta de ciberseguridad defensiva</div>
 
-    {% if limitado %}
-        <div class="error">Demasiados intentos de inicio de sesión. Espera un minuto e inténtalo de nuevo.</div>
-    {% elif form.errors %}
-        <div class="error">Usuario o contraseña incorrectos.</div>
-    {% endif %}
+        {% if limitado %}
+            <div class="alerta-error" role="alert">Demasiados intentos de inicio de sesión. Espera un minuto e inténtalo de nuevo.</div>
+        {% elif form.errors %}
+            <div class="alerta-error" role="alert">Usuario o contraseña incorrectos.</div>
+        {% endif %}
 
-    <form method="post" action="{% url 'login' %}">
-        {% csrf_token %}
-        <label for="id_username">Usuario</label>
-        <input type="text" name="username" id="id_username" autocomplete="username" required autofocus>
-        <label for="id_password">Contraseña</label>
-        <input type="password" name="password" id="id_password" autocomplete="current-password" required>
-        <input type="hidden" name="next" value="{{ next }}">
-        <button type="submit">Iniciar sesión</button>
-    </form>
+        <form method="post" action="{% url 'login' %}">
+            {% csrf_token %}
+            <label for="id_username">Usuario</label>
+            <input class="input-field" type="text" name="username" id="id_username" autocomplete="username" required autofocus>
+            <label for="id_password">Contraseña</label>
+            <input class="input-field" type="password" name="password" id="id_password" autocomplete="current-password" required>
+            <input type="hidden" name="next" value="{{ next }}">
+            <button class="btn btn-blue" type="submit">Iniciar sesión</button>
+        </form>
 
-    <div class="aviso">Uso exclusivo en sistemas propios o con autorización explícita.</div>
-</div>
-</body>
-</html>
+        <div class="aviso-legal">Uso exclusivo en sistemas propios o con autorización explícita.</div>
+    </div>
+</main>
+{% endblock %}

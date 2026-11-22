@@ -1,5 +1,6 @@
 """Utilidades compartidas por los tests. No hacen peticiones a Internet."""
 
+import contextlib
 import http.server
 import socket
 import threading
@@ -67,8 +68,6 @@ class ServidorTCPPrueba:
 
     def __exit__(self, *exc):
         self._activo = False
-        try:
+        with contextlib.suppress(OSError):
             self.sock.shutdown(socket.SHUT_RDWR)  # despierta al hilo bloqueado en accept()
-        except OSError:
-            pass
         self.sock.close()

@@ -20,6 +20,7 @@ MAX_ADVERTENCIAS_COOKIES = 10
 # Validación del valor de cada header (None = correcto; str = problema)
 # ---------------------------------------------------------------------------
 
+
 def _validar_hsts(valor: str) -> str | None:
     m = re.search(r'max-age\s*=\s*"?(\d+)', valor, re.IGNORECASE)
     if not m:
@@ -131,15 +132,18 @@ HEADERS_QUE_REVELAN_TECNOLOGIA = ("X-Powered-By", "X-AspNet-Version", "X-AspNetM
 # Comprobaciones
 # ---------------------------------------------------------------------------
 
+
 def verificar_ssl(host: str, puerto: int = 443) -> dict:
     try:
         ip = resolver_ip_publica(host, puerto)
         ctx = ssl.create_default_context()
-        with socket.create_connection((ip, puerto), timeout=5) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as conn:
-                cert = conn.getpeercert()
-                version_tls = conn.version()
-                cifrado = conn.cipher()
+        with (
+            socket.create_connection((ip, puerto), timeout=5) as sock,
+            ctx.wrap_socket(sock, server_hostname=host) as conn,
+        ):
+            cert = conn.getpeercert()
+            version_tls = conn.version()
+            cifrado = conn.cipher()
         fecha_exp = datetime.datetime.fromtimestamp(
             ssl.cert_time_to_seconds(cert["notAfter"]), tz=datetime.UTC
         )
@@ -178,42 +182,61 @@ def _advertencias(headers, es_https: bool) -> list[dict]:
 
     servidor = headers.get("Server")
     if servidor and re.search(r"\d", servidor):
-        advertencias.append({
-            "tipo": "Fuga de información", "header": "Server", "valor": servidor,
-            "detalle": "Revela la versión del software del servidor",
-            "recomendacion": "Ocultar la versión (ServerTokens Prod en Apache, server_tokens off en Nginx)",
-        })
+        advertencias.append(
+            {
+                "tipo": "Fuga de información",
+                "header": "Server",
+                "valor": servidor,
+                "detalle": "Revela la versión del software del servidor",
+                "recomendacion": (
+                    "Ocultar la versión (ServerTokens Prod en Apache, server_tokens off en Nginx)"
+                ),
+            }
+        )
     for nombre in HEADERS_QUE_REVELAN_TECNOLOGIA:
         valor = headers.get(nombre)
         if valor:
-            advertencias.append({
-                "tipo": "Fuga de información", "header": nombre, "valor": valor,
-                "detalle": "Revela la tecnología usada por el servidor",
-                "recomendacion": f"Eliminar el header {nombre}",
-            })
+            advertencias.append(
+                {
+                    "tipo": "Fuga de información",
+                    "header": nombre,
+                    "valor": valor,
+                    "detalle": "Revela la tecnología usada por el servidor",
+                    "recomendacion": f"Eliminar el header {nombre}",
+                }
+            )
 
     xxss = headers.get("X-XSS-Protection")
     if xxss and xxss.strip() != "0":
-        advertencias.append({
-            "tipo": "Header obsoleto", "header": "X-XSS-Protection", "valor": xxss,
-            "detalle": "El filtro XSS de los navegadores está retirado y puede introducir fallos",
-            "recomendacion": "Usar X-XSS-Protection: 0 (o eliminarlo) y confiar en una CSP",
-        })
+        advertencias.append(
+            {
+                "tipo": "Header obsoleto",
+                "header": "X-XSS-Protection",
+                "valor": xxss,
+                "detalle": "El filtro XSS de los navegadores está retirado y puede introducir fallos",
+                "recomendacion": "Usar X-XSS-Protection: 0 (o eliminarlo) y confiar en una CSP",
+            }
+        )
 
     cookies = headers.get_all("Set-Cookie") or []
     for cookie in cookies[:MAX_ADVERTENCIAS_COOKIES]:
         nombre = cookie.split("=", 1)[0].strip()
         atributos = {a.strip().split("=")[0].lower() for a in cookie.split(";")[1:]}
         faltan = [
-            attr for attr, aplica in (("Secure", es_https), ("HttpOnly", True), ("SameSite", True))
+            attr
+            for attr, aplica in (("Secure", es_https), ("HttpOnly", True), ("SameSite", True))
             if aplica and attr.lower() not in atributos
         ]
         if faltan:
-            advertencias.append({
-                "tipo": "Cookie sin protección", "header": "Set-Cookie", "valor": nombre,
-                "detalle": "Le falta: " + ", ".join(faltan),
-                "recomendacion": "Añadir " + "; ".join(faltan) + " a la cookie",
-            })
+            advertencias.append(
+                {
+                    "tipo": "Cookie sin protección",
+                    "header": "Set-Cookie",
+                    "valor": nombre,
+                    "detalle": "Le falta: " + ", ".join(faltan),
+                    "recomendacion": "Añadir " + "; ".join(faltan) + " a la cookie",
+                }
+            )
     return advertencias
 
 
@@ -226,18 +249,27 @@ def _evaluar_headers(headers) -> tuple[list[dict], list[dict]]:
             valor = "(cubierto por CSP frame-ancestors)"
             advertencia = None
         elif valor is None:
-            faltantes.append({
-                "header": nombre, "descripcion": info["descripcion"],
-                "nivel": info["nivel"], "recomendacion": "Agregar: " + info["recomendacion"],
-            })
+            faltantes.append(
+                {
+                    "header": nombre,
+                    "descripcion": info["descripcion"],
+                    "nivel": info["nivel"],
+                    "recomendacion": "Agregar: " + info["recomendacion"],
+                }
+            )
             continue
         else:
             advertencia = info["validar"](valor) if info["validar"] else None
-        presentes.append({
-            "header": nombre, "valor": valor[:MAX_LONGITUD_VALOR], "descripcion": info["descripcion"],
-            "nivel": info["nivel"], "advertencia": advertencia,
-            "recomendacion": ("Recomendado: " + info["recomendacion"]) if advertencia else None,
-        })
+        presentes.append(
+            {
+                "header": nombre,
+                "valor": valor[:MAX_LONGITUD_VALOR],
+                "descripcion": info["descripcion"],
+                "nivel": info["nivel"],
+                "advertencia": advertencia,
+                "recomendacion": ("Recomendado: " + info["recomendacion"]) if advertencia else None,
+            }
+        )
     return presentes, faltantes
 
 
@@ -270,7 +302,9 @@ def verificar_headers(url: str) -> dict:
 
     problemas_graves = (
         sum(1 for h in faltantes if h["nivel"] == "ALTO")
-        + (not es_https) + (redireccion is False) + (not ssl_info.get("valido"))
+        + (not es_https)
+        + (redireccion is False)
+        + (not ssl_info.get("valido"))
     )
     if problemas_graves >= 2:
         nivel = "ALTO"

@@ -15,13 +15,29 @@ MAX_LONGITUD_BANNER = 120
 MAX_HILOS = 100
 
 PUERTOS_COMUNES = {
-    21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
-    53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP",
-    443: "HTTPS", 445: "SMB", 1433: "MSSQL", 1521: "Oracle",
-    3306: "MySQL", 3389: "RDP", 5432: "PostgreSQL",
-    5900: "VNC", 6379: "Redis", 8080: "HTTP-Alt",
-    8443: "HTTPS-Alt", 8888: "Jupyter", 9200: "Elasticsearch",
-    27017: "MongoDB", 11211: "Memcached"
+    21: "FTP",
+    22: "SSH",
+    23: "Telnet",
+    25: "SMTP",
+    53: "DNS",
+    80: "HTTP",
+    110: "POP3",
+    143: "IMAP",
+    443: "HTTPS",
+    445: "SMB",
+    1433: "MSSQL",
+    1521: "Oracle",
+    3306: "MySQL",
+    3389: "RDP",
+    5432: "PostgreSQL",
+    5900: "VNC",
+    6379: "Redis",
+    8080: "HTTP-Alt",
+    8443: "HTTPS-Alt",
+    8888: "Jupyter",
+    9200: "Elasticsearch",
+    27017: "MongoDB",
+    11211: "Memcached",
 }
 
 PUERTOS_PELIGROSOS = {
@@ -37,7 +53,7 @@ PUERTOS_PELIGROSOS = {
     8888: "Jupyter Notebook puede permitir ejecucion de codigo remoto.",
     9200: "Elasticsearch expuesto puede filtrar todos los datos.",
     27017: "MongoDB sin autenticacion permite acceso total.",
-    11211: "Memcached puede ser usado para ataques DDoS de amplificacion."
+    11211: "Memcached puede ser usado para ataques DDoS de amplificacion.",
 }
 
 
@@ -46,9 +62,7 @@ class ServidorOcupado(EntradaInvalida):
 
 
 # Limita los escaneos simultáneos en el proceso para no agotar hilos y sockets.
-_escaneos_activos = threading.BoundedSemaphore(
-    getattr(settings, "SECURESCAN_MAX_ESCANEOS_SIMULTANEOS", 4)
-)
+_escaneos_activos = threading.BoundedSemaphore(getattr(settings, "SECURESCAN_MAX_ESCANEOS_SIMULTANEOS", 4))
 
 _IMPRIMIBLES = set(string.printable) - set("\x0b\x0c")
 
@@ -106,9 +120,13 @@ def escanear_host(host: str, puertos_extra=None) -> dict:
         entrada = {"puerto": puerto, "servicio": servicio, "peligroso": peligroso, "banner": banner}
         if peligroso:
             entrada["recomendacion"] = PUERTOS_PELIGROSOS[puerto]
-            recomendaciones.append({
-                "puerto": puerto, "servicio": servicio, "recomendacion": PUERTOS_PELIGROSOS[puerto],
-            })
+            recomendaciones.append(
+                {
+                    "puerto": puerto,
+                    "servicio": servicio,
+                    "recomendacion": PUERTOS_PELIGROSOS[puerto],
+                }
+            )
         abiertos.append(entrada)
 
     peligrosos = [p["puerto"] for p in abiertos if p["peligroso"]]

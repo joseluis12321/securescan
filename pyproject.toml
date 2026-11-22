@@ -1,0 +1,62 @@
+[project]
+name = "securescan"
+version = "2.0.0"
+description = "Herramienta web de ciberseguridad defensiva: análisis de logs, escaneo de puertos y verificación de headers HTTP."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Jose Luis Gomez" }]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["scanner/migrations", "staticfiles"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "UP",       # pyupgrade
+    "S",        # bandit (seguridad)
+    "DJ",       # buenas prácticas de Django
+    "C4",       # comprensiones
+    "SIM",      # simplificaciones
+    "RUF",
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # caracteres ambiguos: el proyecto está en español
+]
+
+[tool.ruff.lint.per-file-ignores]
+"scanner/tests/*" = ["S101", "S104", "S105", "S106", "S108", "S310", "SIM117", "RUF012"]
+"scanner/models.py" = ["RUF012"]  # convención de Django en class Meta
+
+[tool.ruff.lint.isort]
+known-first-party = ["scanner", "securescan"]
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "securescan.settings"
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:scanner.*",
+    "ignore:No directory at:UserWarning",  # sin collectstatic en desarrollo
+]
+
+[tool.coverage.run]
+source = ["scanner", "securescan"]
+omit = ["*/migrations/*", "*/tests/*", "securescan/asgi.py", "securescan/wsgi.py"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 85
+
+[tool.bandit]
+exclude_dirs = ["scanner/tests", "venv", "staticfiles"]

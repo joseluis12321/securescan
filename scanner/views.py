@@ -6,8 +6,11 @@ from functools import wraps
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
+from django.core.cache import cache
+from django.db import connection
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_GET, require_POST
 from django_ratelimit.decorators import ratelimit
@@ -34,6 +37,7 @@ class ArchivoDemasiadoGrande(EntradaInvalida):
 # Utilidades
 # ---------------------------------------------------------------------------
 
+
 def vista_api(vista):
     """Decorador para endpoints JSON.
 
@@ -43,6 +47,7 @@ def vista_api(vista):
     - Registra los eventos de seguridad y devuelve los errores inesperados como
       JSON sin filtrar detalles internos.
     """
+
     @wraps(vista)
     def envoltura(request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -50,14 +55,14 @@ def vista_api(vista):
         try:
             return vista(request, *args, **kwargs)
         except ObjetivoNoPermitido as e:
-            logger.warning("SSRF bloqueado: usuario=%s vista=%s: %s",
-                           request.user.pk, vista.__name__, e)
+            logger.warning("SSRF bloqueado: usuario=%s vista=%s: %s", request.user.pk, vista.__name__, e)
             return JsonResponse({"error": str(e)}, status=e.status)
         except EntradaInvalida as e:
             return JsonResponse({"error": str(e)}, status=e.status)
         except Ratelimited:
-            logger.warning("Límite de peticiones superado: usuario=%s vista=%s",
-                           request.user.pk, vista.__name__)
+            logger.warning(
+                "Límite de peticiones superado: usuario=%s vista=%s", request.user.pk, vista.__name__
+            )
             return JsonResponse(
                 {"error": "Demasiadas peticiones. Espera un minuto e inténtalo de nuevo."},
                 status=429,
@@ -67,6 +72,7 @@ def vista_api(vista):
         except Exception:
             logger.exception("Error inesperado en %s", vista.__name__)
             return JsonResponse({"error": "Error interno del servidor"}, status=500)
+
     return envoltura
 
 
@@ -117,6 +123,7 @@ def _guardar(request, tipo, objetivo, resultado):
 # Vistas
 # ---------------------------------------------------------------------------
 
+
 @method_decorator(
     ratelimit(key="ip", rate=settings.SECURESCAN_RATE_LOGIN, method="POST", block=False),
     name="post",
@@ -137,7 +144,32 @@ class LoginConLimite(LoginView):
 
 @login_required
 def home(request):
-    return render(request, "scanner/home.html", {"max_log_mb": settings.SECURESCAN_MAX_LOG_MB})
+    config = {
+        "maxLogMb": settings.SECURESCAN_MAX_LOG_MB,
+        "urls": {
+            "analizar": reverse("analizar"),
+            "escanear": reverse("escanear"),
+            "headers": reverse("headers"),
+            "pdf": reverse("exportar_pdf", args=[0]),
+            "login": reverse("login"),
+        },
+    }
+    return render(request, "scanner/home.html", {"config": config})
+
+
+@require_GET
+def salud(request):
+    """Estado del servicio para Docker/monitores. No requiere login ni revela detalles."""
+    estado, codigo = "ok", 200
+    try:
+        connection.ensure_connection()
+        cache.set("salud", "ok", 5)
+        if cache.get("salud") != "ok":
+            raise RuntimeError("la caché no responde")
+    except Exception:
+        logger.exception("Healthcheck fallido")
+        estado, codigo = "error", 503
+    return JsonResponse({"estado": estado}, status=codigo)
 
 
 @require_POST
@@ -191,14 +223,11 @@ def verificar_headers(request):
 def exportar_pdf(request, pk):
     # Filtrar por usuario impide descargar reportes ajenos (IDOR).
     analisis = get_object_or_404(Analisis, pk=pk, usuario=request.user)
-    buffer = generar_reporte_pdf(
-        analisis.tipo, analisis.resultado, analisis.objetivo, fecha=analisis.fecha
-    )
+    buffer = generar_reporte_pdf(analisis.tipo, analisis.resultado, analisis.objetivo, fecha=analisis.fecha)
     return HttpResponse(
         buffer,
         content_type="application/pdf",
         headers={
-            "Content-Disposition":
-                f'attachment; filename="securescan_{analisis.tipo}_{analisis.pk}.pdf"'
+            "Content-Disposition": f'attachment; filename="securescan_{analisis.tipo}_{analisis.pk}.pdf"'
         },
     )

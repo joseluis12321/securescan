@@ -47,8 +47,10 @@ class EscanerTests(SimpleTestCase):
         def falso(ip, puerto):
             return puerto, puerto in (80, 6379), None
 
-        with mock.patch.object(port_scanner, "resolver_ip_publica", return_value="8.8.8.8"), \
-             mock.patch.object(port_scanner, "escanear_puerto", side_effect=falso):
+        with (
+            mock.patch.object(port_scanner, "resolver_ip_publica", return_value="8.8.8.8"),
+            mock.patch.object(port_scanner, "escanear_puerto", side_effect=falso),
+        ):
             r = escanear_host("ejemplo.com")
         self.assertEqual([p["puerto"] for p in r["puertos_abiertos"]], [80, 6379])
         self.assertEqual(r["puertos_peligrosos"], [6379])
@@ -57,10 +59,12 @@ class EscanerTests(SimpleTestCase):
 
     def test_servidor_ocupado(self):
         semaforo = mock.Mock(acquire=mock.Mock(return_value=False))
-        with mock.patch.object(port_scanner, "resolver_ip_publica", return_value="8.8.8.8"), \
-             mock.patch.object(port_scanner, "_escaneos_activos", semaforo):
-            with self.assertRaises(ServidorOcupado):
-                escanear_host("ejemplo.com")
+        with (
+            mock.patch.object(port_scanner, "resolver_ip_publica", return_value="8.8.8.8"),
+            mock.patch.object(port_scanner, "_escaneos_activos", semaforo),
+            self.assertRaises(ServidorOcupado),
+        ):
+            escanear_host("ejemplo.com")
 
     def test_limpiar_banner(self):
         self.assertEqual(_limpiar_banner(b"220 FTP listo\r\n"), "220 FTP listo")

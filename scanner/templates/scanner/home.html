@@ -1,417 +1,76 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>SecureScan v2</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: sans-serif; background: #0a0e1a; color: #e0e6f0; min-height: 100vh; }
-        nav { background: #0d1117; border-bottom: 1px solid #1f6feb; padding: 16px 32px; display: flex; align-items: center; gap: 12px; }
-        .logo { font-size: 22px; font-weight: 700; color: #58a6ff; }
-        .logo span { color: #3fb950; }
-        .badge { background: #1f6feb22; color: #58a6ff; border: 1px solid #1f6feb; padding: 3px 10px; border-radius: 20px; font-size: 12px; }
-        .container { max-width: 960px; margin: 0 auto; padding: 0 20px 60px; }
-        .tabs { display: flex; gap: 4px; padding: 24px 0 0; margin-bottom: 28px; border-bottom: 1px solid #21262d; flex-wrap: wrap; }
-        .tab { padding: 10px 18px; border-radius: 8px 8px 0 0; cursor: pointer; font-weight: 600; font-size: 13px; color: #8b949e; border: 1px solid transparent; border-bottom: none; transition: all 0.2s; }
-        .tab.active { background: #0d1117; color: #58a6ff; border-color: #21262d; margin-bottom: -1px; }
-        .tab:hover { color: #e0e6f0; }
-        .panel { display: none; }
-        .panel.active { display: block; }
-        .hero { text-align: center; padding: 28px 20px 20px; }
-        .hero h2 { font-size: 24px; font-weight: 800; color: #fff; margin-bottom: 6px; }
-        .hero h2 span { color: #58a6ff; }
-        .hero p { color: #8b949e; font-size: 13px; }
-        .card { background: #0d1117; border: 1px solid #21262d; border-radius: 14px; padding: 28px 32px; margin-bottom: 16px; }
-        .card h3 { font-size: 16px; color: #fff; margin-bottom: 6px; }
-        .card p { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
-        .upload-zone { border: 2px dashed #30363d; border-radius: 12px; padding: 36px; text-align: center; cursor: pointer; transition: border-color 0.2s; }
-        .upload-zone:hover { border-color: #58a6ff; }
-        .upload-icon { font-size: 40px; margin-bottom: 10px; }
-        .upload-zone h3 { font-size: 16px; color: #fff; margin-bottom: 6px; }
-        .upload-zone p { color: #8b949e; font-size: 13px; margin-bottom: 18px; }
-        input[type=file] { display: none; }
-        .btn { border: none; padding: 10px 24px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }
-        .btn:hover { opacity: 0.85; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-blue { background: #1f6feb; color: white; }
-        .btn-green { background: #238636; color: white; }
-        .btn-red { background: #b91c1c; color: white; }
-        .btn-pdf { background: #7c3aed; color: white; margin-top: 12px; width: 100%; padding: 11px; font-size: 13px; display: none; }
-        .btn-full { width: 100%; margin-top: 12px; padding: 13px; font-size: 15px; display: none; }
-        .file-ok { background: #1f2d1f; border: 1px solid #3fb950; border-radius: 8px; padding: 10px 14px; margin-top: 12px; color: #3fb950; font-size: 13px; display: none; }
-        .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
-        .input-field { flex: 1; min-width: 200px; background: #010409; border: 1px solid #30363d; border-radius: 8px; padding: 10px 14px; color: #e0e6f0; font-size: 14px; outline: none; }
-        .input-field:focus { border-color: #58a6ff; }
-        .input-small { width: 160px; flex: none; }
-        .loader { display: none; text-align: center; padding: 32px; }
-        .spinner { width: 40px; height: 40px; border: 4px solid #30363d; border-top-color: #58a6ff; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .result-box { margin-top: 24px; display: none; }
-        .nivel-banner { border-radius: 12px; padding: 20px 24px; margin-bottom: 18px; display: flex; align-items: center; gap: 16px; }
-        .nivel-ALTO { background: #2d1117; border: 1px solid #f85149; }
-        .nivel-MEDIO { background: #2d2208; border: 1px solid #d29922; }
-        .nivel-BAJO { background: #1a2d1a; border: 1px solid #3fb950; }
-        .nivel-texto { font-size: 24px; font-weight: 800; }
-        .nivel-label { font-size: 11px; color: #8b949e; text-transform: uppercase; margin-bottom: 2px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
-        .stats-grid-3 { grid-template-columns: repeat(3, 1fr); }
-        .stat-card { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; padding: 16px; text-align: center; }
-        .stat-n { font-size: 28px; font-weight: 800; color: #58a6ff; }
-        .stat-l { font-size: 11px; color: #8b949e; margin-top: 3px; }
-        .sec-titulo { font-size: 15px; font-weight: 700; color: #fff; margin: 18px 0 12px; padding-bottom: 8px; border-bottom: 1px solid #21262d; }
-        .item { background: #0d1117; border: 1px solid #21262d; border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; }
-        .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-        .item-titulo { font-weight: 600; font-size: 13px; }
-        .item-desc { font-size: 12px; color: #8b949e; margin-top: 2px; }
-        .item-valor { font-size: 11px; color: #58a6ff; background: #010409; border-radius: 4px; padding: 4px 8px; margin-top: 6px; font-family: monospace; word-break: break-all; }
-        .item-rec { font-size: 11px; color: #d29922; background: #2d220822; border: 1px solid #d2992244; border-radius: 4px; padding: 6px 10px; margin-top: 6px; }
-        .item-detalle { font-size: 11px; color: #8b949e; background: #010409; border-radius: 6px; padding: 8px; margin-top: 6px; font-family: monospace; max-height: 90px; overflow-y: auto; white-space: pre-wrap; }
-        .badge-n { padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-        .badge-ALTO { background: #f8514922; color: #f85149; border: 1px solid #f85149; }
-        .badge-MEDIO { background: #d2992222; color: #d29922; border: 1px solid #d29922; }
-        .badge-BAJO { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
-        .badge-OK { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
-        .puertos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-        .puerto { border-radius: 8px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; }
-        .puerto-ok { background: #0d1117; border: 1px solid #21262d; }
-        .puerto-mal { background: #2d1117; border: 1px solid #f85149; }
-        .p-num { font-family: monospace; font-size: 15px; font-weight: 700; color: #58a6ff; }
-        .p-svc { font-size: 11px; color: #8b949e; }
-        .p-banner { font-size: 10px; color: #6e7681; font-family: monospace; margin-top: 3px; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .badge-WARN { background: #d2992222; color: #d29922; border: 1px solid #d29922; }
-        .tag { font-size: 10px; padding: 2px 7px; border-radius: 10px; }
-        .tag-mal { background: #f8514922; color: #f85149; border: 1px solid #f85149; }
-        .tag-ok { background: #3fb95022; color: #3fb950; border: 1px solid #3fb950; }
-        .bar-wrap { background: #21262d; border-radius: 6px; height: 8px; margin: 6px 0 3px; overflow: hidden; }
-        .bar-fill { height: 100%; border-radius: 6px; transition: width 1s; }
-        .bar-alto { background: #f85149; }
-        .bar-medio { background: #d29922; }
-        .bar-bajo { background: #3fb950; }
-        .ssl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; background: #010409; border: 1px solid #21262d; border-radius: 8px; padding: 12px 16px; margin-top: 8px; }
-        .ssl-item .k { font-size: 11px; color: #8b949e; }
-        .ssl-item .v { font-size: 13px; font-weight: 600; }
-        .hora-chart { display: flex; align-items: flex-end; gap: 3px; height: 60px; padding: 0 2px; }
-        .hora-bar-wrap { display: flex; flex-direction: column; align-items: center; flex: 1; height: 100%; justify-content: flex-end; }
-        .hora-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; }
-        .hora-label { font-size: 9px; color: #8b949e; margin-top: 3px; }
-        .presente-border { border-left: 3px solid #3fb950; }
-        .faltante-border { border-left: 3px solid #f85149; }
-        .no-data { color: #8b949e; font-size: 13px; text-align: center; padding: 20px; background: #0d1117; border-radius: 10px; border: 1px solid #21262d; }
-        .usuario { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #8b949e; }
-        .usuario form { margin: 0; }
-        .btn-salir { background: transparent; color: #8b949e; border: 1px solid #30363d; padding: 6px 14px; }
-        .pdf-loading { display: none; text-align: center; padding: 10px; color: #7c3aed; font-size: 13px; }
-        @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2,1fr); } .input-row { flex-direction: column; } }
-    </style>
-</head>
-<body>
-<nav>
-    <div class="logo">Secure<span>Scan</span></div>
-    <div class="badge">v2.0 Defensivo</div>
-    <div class="usuario">
-        <span>&#128100; {{ user.get_username }}</span>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-salir" type="submit">Cerrar sesión</button></form>
-    </div>
-</nav>
-<div class="container">
-    <div class="tabs">
-        <div class="tab active" onclick="cambiarTab('logs',this)">&#128269; Analizador de Logs</div>
-        <div class="tab" onclick="cambiarTab('puertos',this)">&#128268; Escaner de Puertos</div>
-        <div class="tab" onclick="cambiarTab('headers',this)">&#128274; Headers HTTP</div>
+{% extends "scanner/base.html" %}
+{% load static %}
+{% block titulo %}Análisis{% endblock %}
+{% block head %}
+    {{ config|json_script:"config-securescan" }}
+    <script src="{% static 'scanner/js/app.js' %}" defer></script>
+{% endblock %}
+{% block body %}
+{% include "scanner/_nav.html" %}
+<main class="container">
+    <div class="tabs" role="tablist">
+        <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="logs">&#128269; Analizador de Logs</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab="puertos">&#128268; Escáner de Puertos</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab="headers">&#128274; Headers HTTP</button>
     </div>
 
     <!-- LOGS -->
-    <div class="panel active" id="panel-logs">
+    <section class="panel active" id="panel-logs" role="tabpanel">
         <div class="hero">
             <h2>Analizador de <span>Logs</span></h2>
-            <p>Detecta SQLi, XSS, Path Traversal, herramientas de hacking, fuerza bruta e IPs sospechosas</p>
+            <p>Detecta SQLi, XSS, Path Traversal, RCE, Log4Shell, fuerza bruta, herramientas de hacking e IPs sospechosas</p>
         </div>
-        <div class="upload-zone" id="dropZone" onclick="document.getElementById('archivo_log').click()">
+        <div class="upload-zone" id="dropZone">
             <div class="upload-icon">&#128196;</div>
             <h3>Arrastra o selecciona tu archivo de logs</h3>
-            <p>Formatos: .log .txt — máximo {{ max_log_mb }} MB</p>
+            <p>Apache/Nginx, auth.log, syslog — .log .txt — máximo {{ config.maxLogMb }} MB</p>
             <input type="file" id="archivo_log" accept=".log,.txt">
-            <button class="btn btn-blue" onclick="event.stopPropagation();document.getElementById('archivo_log').click()">Seleccionar archivo</button>
-            <div class="file-ok" id="fileOk"></div>
-            <button class="btn btn-green btn-full" id="btnAnalizar" onclick="event.stopPropagation();analizarLogs()">&#128737; Analizar ahora</button>
+            <button class="btn btn-blue" type="button" id="btnSeleccionar">Seleccionar archivo</button>
+            <div class="file-ok" id="fileOk" hidden></div>
+            <button class="btn btn-green btn-full" type="button" id="btnAnalizar" hidden>&#128737; Analizar ahora</button>
         </div>
-        <div class="loader" id="loader-logs"><div class="spinner"></div><p style="color:#8b949e">Analizando amenazas...</p></div>
-        <div class="result-box" id="result-logs"></div>
-        <button class="btn btn-pdf" id="btnPdfLogs" onclick="exportarPdf('logs')">&#128196; Exportar reporte PDF</button>
-        <div class="pdf-loading" id="pdf-loading-logs">Generando PDF...</div>
-    </div>
+        <div class="loader" id="loader-logs" hidden><div class="spinner"></div><p>Analizando amenazas...</p></div>
+        <div class="result-box" id="result-logs" hidden></div>
+        <div class="acciones" id="acciones-logs" hidden></div>
+    </section>
 
     <!-- PUERTOS -->
-    <div class="panel" id="panel-puertos">
+    <section class="panel" id="panel-puertos" role="tabpanel">
         <div class="hero">
-            <h2>Escaner de <span>Puertos</span></h2>
-            <p>Detecta puertos abiertos, servicios peligrosos y recibe recomendaciones</p>
+            <h2>Escáner de <span>Puertos</span></h2>
+            <p>Detecta puertos abiertos, identifica servicios y recibe recomendaciones</p>
         </div>
-        <div class="card">
+        <form class="card" id="form-puertos">
             <h3>Host a escanear</h3>
-            <p>Ingresa IP o dominio. Campo de puertos extra es opcional.</p>
+            <p>IP o dominio. Los puertos extra (separados por comas) son opcionales.</p>
             <div class="input-row">
-                <input class="input-field" type="text" id="inputHost" placeholder="scanme.nmap.org o 45.33.32.156">
-                <input class="input-field input-small" type="text" id="inputPuertosExtra" placeholder="8000,9000">
-                <button class="btn btn-blue" onclick="escanearPuertos()">Escanear</button>
+                <input class="input-field" type="text" id="inputHost" placeholder="scanme.nmap.org o 45.33.32.156" required maxlength="253" autocomplete="off">
+                <input class="input-field input-small" type="text" id="inputPuertosExtra" placeholder="8000,9000" autocomplete="off">
+                <button class="btn btn-blue" type="submit">Escanear</button>
             </div>
-        </div>
-        <div class="loader" id="loader-puertos"><div class="spinner"></div><p style="color:#8b949e">Escaneando puertos...</p></div>
-        <div class="result-box" id="result-puertos"></div>
-        <button class="btn btn-pdf" id="btnPdfPuertos" onclick="exportarPdf('puertos')">&#128196; Exportar reporte PDF</button>
-        <div class="pdf-loading" id="pdf-loading-puertos">Generando PDF...</div>
-    </div>
+        </form>
+        <div class="loader" id="loader-puertos" hidden><div class="spinner"></div><p>Escaneando puertos...</p></div>
+        <div class="result-box" id="result-puertos" hidden></div>
+        <div class="acciones" id="acciones-puertos" hidden></div>
+    </section>
 
     <!-- HEADERS -->
-    <div class="panel" id="panel-headers">
+    <section class="panel" id="panel-headers" role="tabpanel">
         <div class="hero">
             <h2>Verificador de <span>Headers HTTP</span></h2>
-            <p>Analiza 7 headers de seguridad y sus valores, cookies, fugas de informacion, certificado TLS y redireccion HTTPS</p>
+            <p>Analiza headers de seguridad y sus valores, cookies, fugas de información, certificado TLS y redirección HTTPS</p>
         </div>
-        <div class="card">
+        <form class="card" id="form-headers">
             <h3>Sitio web a analizar</h3>
-            <p>Ingresa URL o dominio. Ejemplo: github.com</p>
+            <p>URL o dominio. Ejemplo: github.com</p>
             <div class="input-row">
-                <input class="input-field" type="text" id="inputUrl" placeholder="github.com o https://example.com">
-                <button class="btn btn-blue" onclick="verificarHeaders()">Verificar</button>
+                <input class="input-field" type="text" id="inputUrl" placeholder="github.com o https://example.com" required maxlength="2048" autocomplete="off">
+                <button class="btn btn-blue" type="submit">Verificar</button>
             </div>
-        </div>
-        <div class="loader" id="loader-headers"><div class="spinner"></div><p style="color:#8b949e">Verificando seguridad...</p></div>
-        <div class="result-box" id="result-headers"></div>
-        <button class="btn btn-pdf" id="btnPdfHeaders" onclick="exportarPdf('headers')">&#128196; Exportar reporte PDF</button>
-        <div class="pdf-loading" id="pdf-loading-headers">Generando PDF...</div>
-    </div>
-</div>
-
-<script>
-var URLS = {
-    analizar: "{% url 'analizar' %}",
-    escanear: "{% url 'escanear' %}",
-    headers: "{% url 'headers' %}",
-    pdf: "{% url 'exportar_pdf' 0 %}",
-    login: "{% url 'login' %}"
-};
-var MAX_LOG_BYTES = {{ max_log_mb }} * 1024 * 1024;
-var CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
-var idsGuardados = { logs: null, puertos: null, headers: null };
-
-// Escapa cualquier dato antes de insertarlo como HTML (previene XSS).
-function esc(v) {
-    return String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, function(c) {
-        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
-    });
-}
-function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
-// Normaliza el nivel a una clase CSS conocida (nunca se usa texto libre como clase).
-function nc(nivel) { nivel = String(nivel || ''); return nivel.indexOf('ALTO')>=0?'ALTO':nivel.indexOf('MEDIO')>=0?'MEDIO':'BAJO'; }
-
-// fetch con CSRF, sesión y manejo uniforme de errores.
-function peticion(url, opciones) {
-    opciones = opciones || {};
-    opciones.credentials = 'same-origin';
-    opciones.headers = Object.assign({'X-CSRFToken': CSRF_TOKEN}, opciones.headers || {});
-    return fetch(url, opciones).then(function(r) {
-        if (r.status === 401) { window.location.href = URLS.login + '?next=/'; throw new Error('Sesión caducada'); }
-        var tipo = r.headers.get('Content-Type') || '';
-        if (tipo.indexOf('application/json') === -1) {
-            throw new Error(r.status === 403 ? 'Petición rechazada (CSRF). Recarga la página.' : 'Error del servidor (' + r.status + ')');
-        }
-        return r.json().then(function(d) {
-            if (!r.ok || !d.success) throw new Error(d.error || ('Error ' + r.status));
-            return d;
-        });
-    });
-}
-
-function mostrarError(idDiv, mensaje) {
-    var div = document.getElementById(idDiv);
-    div.innerHTML = '<div class="no-data" style="color:#f85149;border-color:#f85149">Error: ' + esc(mensaje) + '</div>';
-    div.style.display = 'block';
-}
-
-function cambiarTab(nombre, el) {
-    document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
-    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
-    el.classList.add('active');
-    document.getElementById('panel-' + nombre).classList.add('active');
-}
-
-var inputFile = document.getElementById('archivo_log');
-var fileOk = document.getElementById('fileOk');
-var btnAnalizar = document.getElementById('btnAnalizar');
-
-inputFile.addEventListener('change', function() {
-    if (inputFile.files.length > 0) {
-        fileOk.textContent = 'Listo: ' + inputFile.files[0].name + ' (' + (inputFile.files[0].size/1024).toFixed(1) + ' KB)';
-        fileOk.style.display = 'block';
-        btnAnalizar.style.display = 'block';
-    }
-});
-
-var dropZone = document.getElementById('dropZone');
-dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.style.borderColor='#58a6ff'; });
-dropZone.addEventListener('dragleave', function() { dropZone.style.borderColor='#30363d'; });
-dropZone.addEventListener('drop', function(e) {
-    e.preventDefault(); dropZone.style.borderColor='#30363d';
-    if (e.dataTransfer.files.length > 0) { inputFile.files = e.dataTransfer.files; inputFile.dispatchEvent(new Event('change')); }
-});
-
-function analizarLogs() {
-    var archivo = inputFile.files[0];
-    if (!archivo) return;
-    if (archivo.size > MAX_LOG_BYTES) { mostrarError('result-logs', 'El archivo supera el tamaño máximo de {{ max_log_mb }} MB'); return; }
-    document.getElementById('loader-logs').style.display = 'block';
-    document.getElementById('result-logs').style.display = 'none';
-    document.getElementById('btnPdfLogs').style.display = 'none';
-    btnAnalizar.disabled = true;
-    var fd = new FormData();
-    fd.append('archivo_log', archivo);
-    peticion(URLS.analizar, { method: 'POST', body: fd })
-    .then(function(d) {
-        idsGuardados.logs = d.id;
-        mostrarLogs(d.resultado);
-        document.getElementById('btnPdfLogs').style.display = 'block';
-    })
-    .catch(function(e) { mostrarError('result-logs', e.message); })
-    .finally(function() { document.getElementById('loader-logs').style.display = 'none'; btnAnalizar.disabled = false; });
-}
-
-function escanearPuertos() {
-    var host = document.getElementById('inputHost').value.trim();
-    if (!host) { alert('Ingresa un host'); return; }
-    var extra = document.getElementById('inputPuertosExtra').value.trim();
-    var puertosExtra = extra ? extra.split(',').map(function(p){return parseInt(p.trim(), 10);}).filter(function(p){return !isNaN(p);}) : [];
-    document.getElementById('loader-puertos').style.display = 'block';
-    document.getElementById('result-puertos').style.display = 'none';
-    document.getElementById('btnPdfPuertos').style.display = 'none';
-    peticion(URLS.escanear, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({host:host, puertos_extra:puertosExtra}) })
-    .then(function(d) {
-        idsGuardados.puertos = d.id;
-        mostrarPuertos(d.resultado);
-        document.getElementById('btnPdfPuertos').style.display = 'block';
-    })
-    .catch(function(e) { mostrarError('result-puertos', e.message); })
-    .finally(function() { document.getElementById('loader-puertos').style.display = 'none'; });
-}
-
-function verificarHeaders() {
-    var url = document.getElementById('inputUrl').value.trim();
-    if (!url) { alert('Ingresa una URL'); return; }
-    document.getElementById('loader-headers').style.display = 'block';
-    document.getElementById('result-headers').style.display = 'none';
-    document.getElementById('btnPdfHeaders').style.display = 'none';
-    peticion(URLS.headers, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({url:url}) })
-    .then(function(d) {
-        idsGuardados.headers = d.id;
-        mostrarHeaders(d.resultado);
-        document.getElementById('btnPdfHeaders').style.display = 'block';
-    })
-    .catch(function(e) { mostrarError('result-headers', e.message); })
-    .finally(function() { document.getElementById('loader-headers').style.display = 'none'; });
-}
-
-// El PDF se genera en el servidor a partir del análisis guardado (por id).
-function exportarPdf(tipo) {
-    var id = idsGuardados[tipo];
-    if (!id) { alert('Primero realiza un analisis'); return; }
-    var loadingEl = document.getElementById('pdf-loading-' + tipo);
-    var btnEl = document.getElementById('btnPdf' + tipo.charAt(0).toUpperCase() + tipo.slice(1));
-    loadingEl.style.display = 'block';
-    btnEl.disabled = true;
-    fetch(URLS.pdf.replace('/0/', '/' + encodeURIComponent(id) + '/'), { credentials: 'same-origin' })
-    .then(function(r) {
-        if (!r.ok) throw new Error('Error al generar PDF');
-        return r.blob();
-    })
-    .then(function(blob) {
-        var url = window.URL.createObjectURL(blob);
-        var a = document.createElement('a');
-        a.href = url;
-        a.download = 'securescan_' + tipo + '_' + id + '.pdf';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-    })
-    .catch(function() { alert('Error al generar PDF'); })
-    .finally(function() { loadingEl.style.display = 'none'; btnEl.disabled = false; });
-}
-
-function mostrarLogs(r) {
-    var div = document.getElementById('result-logs');
-    var res = r.resumen || {};
-    var n = nc(res.nivel_riesgo);
-    var horas = r.actividad_por_hora || {};
-    var html = '<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128737;</div><div><div class="nivel-label">Nivel de riesgo detectado</div><div class="nivel-texto">'+esc(res.nivel_riesgo)+'</div></div></div>';
-    html += '<div class="stats-grid"><div class="stat-card"><div class="stat-n">'+num(res.total_lineas)+'</div><div class="stat-l">Lineas analizadas</div></div><div class="stat-card"><div class="stat-n" style="color:'+(num(res.total_amenazas)>0?'#f85149':'#3fb950')+'">'+num(res.total_amenazas)+'</div><div class="stat-l">Amenazas</div></div><div class="stat-card"><div class="stat-n" style="color:'+(num(res.ips_sospechosas)>0?'#d29922':'#3fb950')+'">'+num(res.ips_sospechosas)+'</div><div class="stat-l">IPs sospechosas</div></div><div class="stat-card"><div class="stat-n" style="color:#8b949e">'+Object.keys(horas).length+'</div><div class="stat-l">Horas con actividad</div></div></div>';
-    if (Object.keys(horas).length>0) {
-        var maxV=Math.max.apply(null,Object.values(horas).map(num));
-        html+='<div class="sec-titulo">&#128200; Actividad por hora</div><div style="background:#0d1117;border:1px solid #21262d;border-radius:10px;padding:16px"><div class="hora-chart">';
-        for(var h=0;h<24;h++){var hs=h<10?'0'+h:''+h;var v=num(horas[hs]);var pct=maxV>0?Math.max(4,Math.round((v/maxV)*56)):4;var col=v>maxV*0.7?'#f85149':v>maxV*0.4?'#d29922':'#1f6feb';html+='<div class="hora-bar-wrap"><div class="hora-bar" style="height:'+pct+'px;background:'+col+'" title="'+hs+':00 - '+v+' eventos"></div><div class="hora-label">'+(h%6===0?hs:'')+'</div></div>';}
-        html+='</div></div>';
-    }
-    var amenazas = r.amenazas || [];
-    if (amenazas.length>0) {
-        html+='<div class="sec-titulo">&#128680; Amenazas encontradas</div>';
-        amenazas.forEach(function(a){
-            var det=(a.detalle||[]).map(function(d){return (d.linea?'Linea '+num(d.linea)+': ':'')+esc(d.contenido);}).join('\n');
-            html+='<div class="item"><div class="item-header"><span class="item-titulo">'+esc(a.tipo)+'</span><span class="badge-n badge-'+nc(a.nivel)+'">'+esc(a.nivel)+'</span></div><div class="item-desc">'+num(a.cantidad)+' ocurrencias detectadas</div><div class="item-detalle">'+det+'</div></div>';
-        });
-    } else { html+='<div class="no-data" style="color:#3fb950">&#10003; No se detectaron amenazas</div>'; }
-    var ips = r.ips_sospechosas || [];
-    if (ips.length>0) {
-        html+='<div class="sec-titulo">&#127758; IPs sospechosas</div>';
-        ips.forEach(function(ip){html+='<div class="item"><div class="item-header"><span class="item-titulo" style="font-family:monospace">'+esc(ip.ip)+'</span><span class="badge-n badge-'+nc(ip.nivel)+'">'+esc(ip.nivel)+'</span></div><div class="item-desc">'+num(ip.apariciones)+' apariciones · '+num(ip.eventos_maliciosos)+' peticiones maliciosas · '+num(ip.fallos_login)+' logins fallidos</div></div>';});
-    }
-    div.innerHTML=html; div.style.display='block';
-}
-
-function mostrarPuertos(r) {
-    var div = document.getElementById('result-puertos');
-    var res = r.resumen || {};
-    var n = nc(res.nivel_riesgo);
-    var html='<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128268;</div><div><div class="nivel-label">Escaneo — '+esc(r.host)+' ('+esc(r.ip)+')</div><div class="nivel-texto">'+esc(res.nivel_riesgo)+'</div></div></div>';
-    html+='<div class="stats-grid stats-grid-3"><div class="stat-card"><div class="stat-n">'+num(res.total_verificados)+'</div><div class="stat-l">Verificados</div></div><div class="stat-card"><div class="stat-n" style="color:'+(num(res.total_abiertos)>0?'#d29922':'#3fb950')+'">'+num(res.total_abiertos)+'</div><div class="stat-l">Abiertos</div></div><div class="stat-card"><div class="stat-n" style="color:'+(num(res.total_peligrosos)>0?'#f85149':'#3fb950')+'">'+num(res.total_peligrosos)+'</div><div class="stat-l">Peligrosos</div></div></div>';
-    var abiertos = r.puertos_abiertos || [];
-    if (abiertos.length>0){
-        html+='<div class="sec-titulo">&#128308; Puertos abiertos</div><div class="puertos-grid">';
-        abiertos.forEach(function(p){var cls=p.peligroso?'puerto-mal':'puerto-ok';var tag=p.peligroso?'<span class="tag tag-mal">RIESGO</span>':'<span class="tag tag-ok">OK</span>';html+='<div class="puerto '+cls+'"><div><div class="p-num">:'+num(p.puerto)+'</div><div class="p-svc">'+esc(p.servicio)+'</div>'+(p.banner?'<div class="p-banner" title="'+esc(p.banner)+'">'+esc(p.banner)+'</div>':'')+'</div>'+tag+'</div>';});
-        html+='</div>';
-    } else { html+='<div class="no-data" style="color:#3fb950;border-color:#3fb950">&#10003; Sin puertos abiertos</div>'; }
-    var recs = r.recomendaciones || [];
-    if (recs.length>0){
-        html+='<div class="sec-titulo">&#9888; Recomendaciones</div>';
-        recs.forEach(function(rec){html+='<div class="item"><div class="item-header"><span class="item-titulo">Puerto :'+num(rec.puerto)+' — '+esc(rec.servicio)+'</span><span class="badge-n badge-ALTO">RIESGO</span></div><div class="item-rec">&#128161; '+esc(rec.recomendacion)+'</div></div>';});
-    }
-    div.innerHTML=html; div.style.display='block';
-}
-
-function mostrarHeaders(r) {
-    var div = document.getElementById('result-headers');
-    var res = r.resumen || {};
-    var n = nc(res.nivel_riesgo);
-    var pts = Math.max(0, Math.min(100, num(res.puntuacion)));
-    var fillCls=n==='ALTO'?'bar-alto':n==='MEDIO'?'bar-medio':'bar-bajo';
-    var html='<div class="nivel-banner nivel-'+n+'"><div style="font-size:38px">&#128274;</div><div style="flex:1"><div class="nivel-label">Analisis — '+esc(r.url)+'</div><div class="nivel-texto">'+esc(res.nivel_riesgo)+'</div><div class="bar-wrap"><div class="bar-fill '+fillCls+'" style="width:'+pts+'%"></div></div><div style="font-size:11px;color:#8b949e">Puntuacion: '+pts+'/100 — '+num(res.presentes)+' de '+num(res.total)+' headers</div></div></div>';
-    html+='<div class="stats-grid stats-grid-3"><div class="stat-card"><div class="stat-n" style="color:#3fb950">'+num(res.presentes)+'</div><div class="stat-l">Presentes</div></div><div class="stat-card"><div class="stat-n" style="color:#f85149">'+num(res.faltantes)+'</div><div class="stat-l">Faltantes</div></div><div class="stat-card"><div class="stat-n">'+pts+'</div><div class="stat-l">Puntuacion</div></div></div>';
-    if (r.ssl_info){
-        var ssl=r.ssl_info; var dias=num(ssl.dias_restantes);
-        html+='<div class="sec-titulo">&#128272; Certificado SSL</div>';
-        if(ssl.valido){html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">&#10003; Certificado valido</span><span class="badge-n badge-'+(dias<30?'MEDIO':'BAJO')+'">'+(dias<30?'EXPIRA PRONTO':'VIGENTE')+'</span></div><div class="ssl-grid"><div class="ssl-item"><div class="k">Expira</div><div class="v">'+esc(ssl.expira)+'</div></div><div class="ssl-item"><div class="k">Dias restantes</div><div class="v">'+dias+' dias</div></div><div class="ssl-item"><div class="k">Version TLS</div><div class="v">'+esc(ssl.version_tls||'—')+'</div></div><div class="ssl-item"><div class="k">Emisor</div><div class="v">'+esc((ssl.emisor||{}).organizationName||'—')+'</div></div></div></div>';}
-        else{html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">&#10007; SSL no disponible</span><span class="badge-n badge-ALTO">ALTO</span></div><div class="item-desc">'+esc(ssl.error||'No se pudo verificar')+'</div></div>';}
-    }
-    var rd=r.redireccion_https; var rdOk=rd!==false; var rdTxt=rd===true?'&#10003; Redirige de HTTP a HTTPS correctamente':rd===false?'&#10007; HTTP no redirige a HTTPS':'&#10003; HTTP (puerto 80) no disponible: solo HTTPS';
-    html+='<div class="sec-titulo">&#128279; Redireccion HTTPS</div><div class="item" style="border-left:3px solid '+(rdOk?'#3fb950':'#f85149')+'"><div class="item-header"><span class="item-titulo">'+rdTxt+'</span><span class="badge-n badge-'+(rdOk?'BAJO':'ALTO')+'">'+(rdOk?'OK':'RIESGO')+'</span></div></div>';
-    var presentes = r.headers_presentes || [];
-    if (presentes.length>0){html+='<div class="sec-titulo">&#10003; Headers presentes</div>';presentes.forEach(function(h){var valor=String(h.valor||'');html+='<div class="item presente-border"><div class="item-header"><span class="item-titulo">'+esc(h.header)+'</span>'+(h.advertencia?'<span class="badge-n badge-WARN">MEJORABLE</span>':'<span class="badge-n badge-OK">OK</span>')+'</div><div class="item-desc">'+esc(h.descripcion)+'</div><div class="item-valor">'+esc(valor.substring(0,120))+(valor.length>120?'...':'')+'</div>'+(h.advertencia?'<div class="item-rec">&#9888; '+esc(h.advertencia)+'<br>&#128161; '+esc(h.recomendacion)+'</div>':'')+'</div>';});}
-    var faltantes = r.headers_faltantes || [];
-    if (faltantes.length>0){html+='<div class="sec-titulo">&#10007; Headers faltantes</div>';faltantes.forEach(function(h){html+='<div class="item faltante-border"><div class="item-header"><span class="item-titulo">'+esc(h.header)+'</span><span class="badge-n badge-'+nc(h.nivel)+'">'+esc(h.nivel)+'</span></div><div class="item-desc">'+esc(h.descripcion)+'</div><div class="item-rec">&#128161; '+esc(h.recomendacion)+'</div></div>';});}
-    var adv = r.advertencias || [];
-    if (adv.length>0){html+='<div class="sec-titulo">&#9888; Otras advertencias</div>';adv.forEach(function(a){html+='<div class="item"><div class="item-header"><span class="item-titulo">'+esc(a.tipo)+' — '+esc(a.header)+'</span><span class="badge-n badge-WARN">AVISO</span></div><div class="item-valor">'+esc(a.valor)+'</div><div class="item-desc">'+esc(a.detalle)+'</div><div class="item-rec">&#128161; '+esc(a.recomendacion)+'</div></div>';});}
-    div.innerHTML=html; div.style.display='block';
-}
-</script>
-</body>
-</html>
+        </form>
+        <div class="loader" id="loader-headers" hidden><div class="spinner"></div><p>Verificando seguridad...</p></div>
+        <div class="result-box" id="result-headers" hidden></div>
+        <div class="acciones" id="acciones-headers" hidden></div>
+    </section>
+</main>
+{% endblock %}

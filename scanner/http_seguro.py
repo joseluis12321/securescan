@@ -47,9 +47,7 @@ class _RedireccionSegura(urllib.request.HTTPRedirectHandler):
 
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if urlsplit(newurl).scheme not in ("http", "https"):
-            raise urllib.error.HTTPError(
-                newurl, code, "Redirección a un esquema no permitido", headers, fp
-            )
+            raise urllib.error.HTTPError(newurl, code, "Redirección a un esquema no permitido", headers, fp)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -107,7 +105,8 @@ def obtener(url: str, timeout: float = 8):
     Lanza EntradaInvalida si la URL o alguna redirección apunta a una red
     interna, y OSError/HTTPException si el sitio no responde.
     """
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    # Seguro: el opener solo tiene manejadores http/https (sin file:// ni ftp://).
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
     try:
         with crear_opener().open(req, timeout=timeout) as respuesta:
             return respuesta.status, respuesta.headers, respuesta.geturl()

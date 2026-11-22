@@ -1,0 +1,69 @@
+# Entorno tipo producción en local: SecureScan + PostgreSQL + Redis.
+#
+#   docker compose up -d --build
+#   docker compose exec web python manage.py createsuperuser
+#   -> http://127.0.0.1:8000
+#
+# Requiere un archivo .env con SECRET_KEY (ver .env.example). En un servidor real
+# pon delante un proxy con HTTPS (Nginx, Caddy, Traefik) y quita las líneas
+# marcadas como "solo local".
+
+services:
+  web:
+    build: .
+    image: securescan:latest
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Define SECRET_KEY en el archivo .env}
+      DEBUG: "False"
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DATABASE_URL: postgres://securescan:${POSTGRES_PASSWORD:-securescan}@db:5432/securescan
+      CACHE_URL: redis://redis:6379/0
+      SECURE_SSL_REDIRECT: "False"   # solo local: sin HTTPS
+      SECURE_COOKIES: "False"        # solo local: sin HTTPS
+      SECURE_HSTS_SECONDS: "0"       # solo local: sin HTTPS
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: securescan
+      POSTGRES_USER: securescan
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securescan}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securescan -d securescan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

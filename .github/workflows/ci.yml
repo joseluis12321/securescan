@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.14"
+  # Configuración solo para CI (no es un secreto real).
+  SECRET_KEY: clave-solo-para-ci-no-usar-en-produccion
+  DEBUG: "True"
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install ruff==0.17.6
+      - run: ruff check --output-format=github .
+      - run: ruff format --check .
+
+  tests:
+    name: Tests y cobertura
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Migraciones al día
+        run: python manage.py makemigrations --check --dry-run
+      - name: Tests
+        run: pytest --cov --cov-report=term --cov-report=xml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cobertura
+          path: coverage.xml
+
+  seguridad:
+    name: Auditoría de seguridad
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - name: Bandit (código)
+        run: bandit -c pyproject.toml -r scanner securescan
+      - name: pip-audit (dependencias)
+        run: pip-audit -r requirements.txt
+      - name: Checklist de despliegue de Django
+        env:
+          DEBUG: "False"
+          ALLOWED_HOSTS: securescan.ejemplo.com
+          CACHE_URL: redis://localhost:6379/0
+        run: python manage.py check --deploy --fail-level WARNING
+
+  docker:
+    name: Build de la imagen
+    runs-on: ubuntu-latest
+    needs: [lint, tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: securescan:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

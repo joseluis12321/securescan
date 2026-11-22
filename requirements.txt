@@ -1,8 +1,15 @@
-asgiref==3.11.1
-charset-normalizer==3.4.7
+# Dependencias de producción, con versiones fijadas (las actualiza Dependabot).
+Django==6.0.10
 django-environ==0.14.0
 django-ratelimit==4.1.0
-Django==6.0.5
-pillow==12.2.0
 reportlab==4.5.0
-sqlparse==0.5.5
+gunicorn==27.0.1
+whitenoise==6.12.0
+psycopg[binary]==3.3.9
+redis==8.1.0
+
+# Transitivas
+asgiref==3.11.1
+sqlparse==0.6.1
+pillow==13.0.0
+charset-normalizer==3.4.7
