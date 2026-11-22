@@ -1,7 +1,12 @@
-import urllib.request
-import ssl
-import socket
 import datetime
+import http.client
+import socket
+import ssl
+import urllib.error
+import urllib.request
+from urllib.parse import urlsplit
+
+from .seguridad import EntradaInvalida, crear_conexion_segura, resolver_ip_publica
 
 HEADERS_SEGURIDAD = {
     "Strict-Transport-Security": {
@@ -46,17 +51,105 @@ HEADERS_SEGURIDAD = {
     }
 }
 
-def verificar_ssl(host):
+MAX_LONGITUD_URL = 2048
+MAX_REDIRECCIONES = 5
+
+
+class _ConexionHTTPSegura(http.client.HTTPConnection):
+    """Conexión HTTP que valida la IP de destino antes de conectar (anti-SSRF)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._create_connection = crear_conexion_segura
+
+
+class _ConexionHTTPSSegura(http.client.HTTPSConnection):
+    """Conexión HTTPS que valida la IP de destino antes de conectar (anti-SSRF)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._create_connection = crear_conexion_segura
+
+
+class _ManejadorHTTPSeguro(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_ConexionHTTPSegura, req)
+
+
+class _ManejadorHTTPSSeguro(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_ConexionHTTPSSegura, req, context=self._context)
+
+
+class _RedireccionSegura(urllib.request.HTTPRedirectHandler):
+    """Solo sigue redirecciones http/https y con un máximo de saltos."""
+
+    max_redirections = MAX_REDIRECCIONES
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urlsplit(newurl).scheme not in ("http", "https"):
+            raise urllib.error.HTTPError(newurl, code, "Redirección a un esquema no permitido", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def _crear_opener():
+    """Opener con solo los manejadores necesarios.
+
+    No incluye file://, ftp:// ni proxies del entorno: así una redirección no
+    puede usarse para leer archivos locales ni para saltarse la validación.
+    El certificado no se verifica aquí a propósito (se analiza aparte en
+    verificar_ssl) para poder revisar headers de sitios con certificados malos.
+    """
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    opener = urllib.request.OpenerDirector()
+    for manejador in (
+        _ManejadorHTTPSeguro(),
+        _ManejadorHTTPSSeguro(context=ctx),
+        _RedireccionSegura(),
+        urllib.request.HTTPDefaultErrorHandler(),
+        urllib.request.HTTPErrorProcessor(),
+        urllib.request.UnknownHandler(),
+    ):
+        opener.add_handler(manejador)
+    return opener
+
+
+def normalizar_url(url):
+    """Devuelve (url, host, puerto_tls) o lanza EntradaInvalida."""
+    if not isinstance(url, str):
+        raise EntradaInvalida("La URL debe ser texto")
+    url = url.strip()
+    if not url or len(url) > MAX_LONGITUD_URL:
+        raise EntradaInvalida("URL vacía o demasiado larga")
+    if "://" not in url:
+        url = "https://" + url
+
+    partes = urlsplit(url)
+    if partes.scheme not in ("http", "https"):
+        raise EntradaInvalida("Solo se permiten URLs http:// o https://")
+    if not partes.hostname:
+        raise EntradaInvalida("La URL no contiene un host válido")
     try:
+        puerto = partes.port
+    except ValueError as e:
+        raise EntradaInvalida("Puerto inválido en la URL") from e
+
+    puerto_tls = puerto if (partes.scheme == "https" and puerto) else 443
+    return url, partes.hostname, puerto_tls
+
+
+def verificar_ssl(host, puerto=443):
+    try:
+        ip = resolver_ip_publica(host, puerto)
         ctx = ssl.create_default_context()
-        conn = ctx.wrap_socket(socket.socket(), server_hostname=host)
-        conn.settimeout(5)
-        conn.connect((host, 443))
-        cert = conn.getpeercert()
-        conn.close()
-        fecha_str = cert["notAfter"]
-        fecha_exp = datetime.datetime.strptime(fecha_str, "%b %d %H:%M:%S %Y %Z")
-        dias_restantes = (fecha_exp - datetime.datetime.utcnow()).days
+        with socket.create_connection((ip, puerto), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as conn:
+                cert = conn.getpeercert()
+        fecha_exp = datetime.datetime.fromtimestamp(
+            ssl.cert_time_to_seconds(cert["notAfter"]), tz=datetime.UTC)
+        dias_restantes = (fecha_exp - datetime.datetime.now(datetime.UTC)).days
         return {
             "valido": True,
             "expira": fecha_exp.strftime("%d/%m/%Y"),
@@ -65,42 +158,40 @@ def verificar_ssl(host):
             "sujeto": dict(x[0] for x in cert.get("subject", [])),
             "emisor": dict(x[0] for x in cert.get("issuer", []))
         }
-    except Exception as e:
+    except (OSError, KeyError, ValueError) as e:  # incluye SSLError y EntradaInvalida
         return {"valido": False, "error": str(e)}
 
 def verificar_headers(url):
-    if not url.startswith("http"):
-        url = "https://" + url
+    """Analiza los headers de seguridad de `url`.
+
+    Lanza EntradaInvalida/ObjetivoNoPermitido si la URL no es válida o apunta
+    (directamente o mediante redirecciones) a una red interna.
+    """
+    url, host, puerto_tls = normalizar_url(url)
+    # Validación temprana para dar un error claro antes de conectar.
+    resolver_ip_publica(host)
 
     resultado = {
         "url": url,
         "headers_presentes": [],
         "headers_faltantes": [],
         "todos_headers": {},
-        "ssl_info": {},
+        "ssl_info": verificar_ssl(host, puerto_tls),
         "resumen": {}
     }
 
     try:
-        host = url.replace("https://", "").replace("http://", "").split("/")[0]
-        resultado["ssl_info"] = verificar_ssl(host)
-    except:
-        resultado["ssl_info"] = {"valido": False, "error": "No se pudo verificar SSL"}
-
-    try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         req = urllib.request.Request(url, headers={"User-Agent": "SecureScan/2.0"})
-        response = urllib.request.urlopen(req, timeout=8, context=ctx)
-        headers_reales = dict(response.headers)
-        resultado["todos_headers"] = headers_reales
-        resultado["codigo_estado"] = response.status
-
-        redir_url = response.geturl()
-        resultado["redireccion_https"] = redir_url.startswith("https://")
-    except Exception as e:
-        return {"error": str(e)}
+        with _crear_opener().open(req, timeout=8) as response:
+            headers_reales = dict(response.headers)
+            resultado["todos_headers"] = headers_reales
+            resultado["codigo_estado"] = response.status
+            resultado["redireccion_https"] = response.geturl().startswith("https://")
+    except EntradaInvalida:
+        # Una redirección intentó llevarnos a una red interna.
+        raise
+    except (OSError, http.client.HTTPException, ValueError) as e:
+        return {"error": f"No se pudo conectar con {url}: {e}"}
 
     for header, info in HEADERS_SEGURIDAD.items():
         encontrado = any(h.lower() == header.lower() for h in headers_reales)

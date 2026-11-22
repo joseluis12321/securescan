@@ -62,11 +62,37 @@ cd securescan
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+
+# Configuración: copia la plantilla y pon una SECRET_KEY propia
+cp .env.example .env
+python3 -c "import secrets; print(secrets.token_urlsafe(50))"   # pega el resultado en SECRET_KEY
+
 python3 manage.py migrate
+python3 manage.py createsuperuser   # usuario para iniciar sesión
 python3 manage.py runserver
 ```
 
-Abre tu navegador en: http://127.0.0.1:8000
+Abre tu navegador en: http://127.0.0.1:8000 e inicia sesión.
+
+Para escanear tu red local o `localhost` (bloqueado por defecto para evitar SSRF), pon
+`SECURESCAN_PERMITIR_REDES_PRIVADAS=True` en tu `.env`. Úsalo solo en local.
+
+---
+
+## Seguridad
+
+- Login obligatorio, protección CSRF y límite de intentos de inicio de sesión.
+- Protección SSRF: no se permiten objetivos internos (localhost, redes privadas, metadatos cloud), ni siquiera mediante redirecciones.
+- Límite de peticiones por usuario en todos los análisis.
+- Subida de logs validada (extensión, tamaño máximo y contenido de texto).
+- Los reportes PDF se generan en el servidor a partir de análisis guardados, y cada usuario solo accede a los suyos.
+- En producción: `DEBUG=False`, `ALLOWED_HOSTS` con tu dominio y `CACHE_URL=redis://...` (caché compartida para el límite de peticiones).
+
+Ejecutar los tests:
+
+```bash
+python3 manage.py test scanner
+```
 
 ---
 

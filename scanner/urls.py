@@ -6,5 +6,5 @@ urlpatterns = [
     path('analizar/', views.analizar, name='analizar'),
     path('escanear/', views.escanear_puertos, name='escanear'),
     path('headers/', views.verificar_headers, name='headers'),
-    path('exportar-pdf/', views.exportar_pdf, name='exportar_pdf'),
+    path('analisis/<int:pk>/pdf/', views.exportar_pdf, name='exportar_pdf'),
 ]

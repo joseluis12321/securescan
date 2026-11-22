@@ -12,20 +12,28 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+import environ
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# La configuración sensible se lee de variables de entorno o del archivo .env
+# (ver .env.example). Las variables de entorno reales tienen prioridad.
+env = environ.Env(
+    DEBUG=(bool, False),
+    SECURESCAN_PERMITIR_REDES_PRIVADAS=(bool, False),
+    SECURESCAN_MAX_LOG_MB=(int, 10),
+)
+environ.Env.read_env(BASE_DIR / '.env')
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-f8qau-90=la(tu=e6%ie85h9)-^jrt1zqs_knni!mok@+)jfst'
+# Obligatoria: si no está definida, Django no arranca.
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['localhost', '127.0.0.1'])
 
 
 # Application definition
@@ -37,8 +45,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'rest_framework',  
-    'scanner',          
+    'rest_framework',
+    'django_ratelimit',
+    'scanner',
 ]
 
 MIDDLEWARE = [
@@ -104,7 +113,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es'
 
 TIME_ZONE = 'UTC'
 
@@ -117,3 +126,42 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+
+# Caché (usada por el límite de peticiones).
+# Desarrollo: memoria local. Producción: CACHE_URL=redis://host:6379/0
+CACHES = {'default': env.cache_url('CACHE_URL', default='locmemcache://')}
+
+# El backend Redis nativo de Django funciona bien con django-ratelimit aunque
+# no esté en su lista "oficial".
+SILENCED_SYSTEM_CHECKS = ['django_ratelimit.W001']
+if DEBUG and CACHES['default']['BACKEND'].endswith('LocMemCache'):
+    # Con runserver (un solo proceso) la caché local es suficiente. Sin DEBUG
+    # este check sigue activo y obliga a configurar una caché compartida.
+    SILENCED_SYSTEM_CHECKS.append('django_ratelimit.E003')
+
+
+# Autenticación
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'home'
+LOGOUT_REDIRECT_URL = 'login'
+
+
+# Configuración propia de SecureScan
+
+# Permite escanear redes privadas/localhost (192.168.x.x, 127.0.0.1...).
+# Desactivado por defecto para evitar SSRF. Actívalo solo en uso local.
+SECURESCAN_PERMITIR_REDES_PRIVADAS = env('SECURESCAN_PERMITIR_REDES_PRIVADAS')
+
+# Tamaño máximo del archivo de log subido, en MB.
+SECURESCAN_MAX_LOG_MB = env('SECURESCAN_MAX_LOG_MB')
+
+# Máximo de puertos extra que se pueden pedir en un escaneo.
+SECURESCAN_MAX_PUERTOS_EXTRA = 100
+
+# Límites de peticiones (django-ratelimit). Formato: "<n>/<s|m|h|d>".
+SECURESCAN_RATE_LOGIN = '5/m'
+SECURESCAN_RATE_ANALISIS = '20/m'
+SECURESCAN_RATE_ESCANEO = '10/m'
+SECURESCAN_RATE_HEADERS = '20/m'
+SECURESCAN_RATE_PDF = '30/m'

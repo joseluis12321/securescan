@@ -1,5 +1,7 @@
-import socket
 import concurrent.futures
+import socket
+
+from .seguridad import resolver_ip_publica, validar_puertos
 
 PUERTOS_COMUNES = {
     21: "FTP", 22: "SSH", 23: "Telnet", 25: "SMTP",
@@ -27,30 +29,30 @@ PUERTOS_PELIGROSOS = {
     11211: "Memcached puede ser usado para ataques DDoS de amplificacion."
 }
 
-def escanear_puerto(host, puerto, timeout=1):
+def escanear_puerto(ip, puerto, timeout=1):
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(timeout)
-        resultado = sock.connect_ex((host, puerto))
-        sock.close()
-        return puerto, resultado == 0
-    except:
+        with socket.create_connection((ip, puerto), timeout=timeout):
+            return puerto, True
+    except OSError:
         return puerto, False
 
 def escanear_host(host, puertos_extra=None):
+    """Escanea los puertos comunes (y extra) de `host`.
+
+    Lanza EntradaInvalida/ObjetivoNoPermitido si el host o los puertos no son
+    válidos o si el host resuelve a una red interna (protección SSRF).
+    """
+    puertos_extra = validar_puertos(puertos_extra)
+    ip = resolver_ip_publica(host)
+
     resultados = {
         "host": host,
         "puertos_abiertos": [],
         "puertos_peligrosos": [],
         "recomendaciones": [],
-        "resumen": {}
+        "resumen": {},
+        "ip": ip,
     }
-
-    try:
-        ip = socket.gethostbyname(host)
-        resultados["ip"] = ip
-    except:
-        return {"error": f"No se pudo resolver el host: {host}"}
 
     puertos_a_escanear = dict(PUERTOS_COMUNES)
     if puertos_extra:

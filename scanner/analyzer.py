@@ -23,10 +23,17 @@ PATRONES_TRAVERSAL = [
     r'(\.\./|\.\.\\|%2e%2e%2f|%252e%252e)',
 ]
 
+# Las líneas reales de log rara vez superan unos cientos de caracteres. Recortar
+# evita que una línea gigante dispare un ReDoS con patrones como 'union.*select'.
+MAX_LONGITUD_LINEA = 8192
+
+
 def analizar_logs(contenido):
-    lineas = contenido.splitlines()
+    """Analiza un log. `contenido` puede ser un str o un iterable de líneas."""
+    lineas = contenido.splitlines() if isinstance(contenido, str) else contenido
+    total_lineas = 0
     resultados = {
-        'total_lineas': len(lineas),
+        'total_lineas': 0,
         'amenazas': [],
         'ips_sospechosas': [],
         'resumen': {},
@@ -48,6 +55,8 @@ def analizar_logs(contenido):
     actividad_horas = Counter()
 
     for numero, linea in enumerate(lineas, 1):
+        total_lineas = numero
+        linea = linea[:MAX_LONGITUD_LINEA]
         ips_encontradas = re.findall(patron_ip, linea)
         for ip in ips_encontradas:
             ips_counter[ip] += 1
@@ -151,9 +160,10 @@ def analizar_logs(contenido):
             'nivel': 'BAJO'
         })
 
+    resultados['total_lineas'] = total_lineas
     resultados['actividad_por_hora'] = dict(sorted(actividad_horas.items()))
     resultados['resumen'] = {
-        'total_lineas': len(lineas),
+        'total_lineas': total_lineas,
         'total_amenazas': len(resultados['amenazas']),
         'ips_sospechosas': len(resultados['ips_sospechosas']),
         'nivel_riesgo': calcular_nivel_riesgo(resultados)

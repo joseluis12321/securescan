@@ -6,6 +6,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 import io
 import datetime
+from xml.sax.saxutils import escape
+
+from django.utils import timezone
 
 # Paleta limpia — fondo blanco, texto negro, acentos azul/rojo/verde
 AZUL       = colors.HexColor('#1a56db')
@@ -39,6 +42,10 @@ def _estilo_codigo():
     return ParagraphStyle('cod', fontSize=8, textColor=GRIS_OSC,
         fontName='Courier', spaceAfter=3, leading=12)
 
+def _e(valor):
+    """Escapa texto para Paragraph: ReportLab interpreta <b>, <font>, etc."""
+    return escape(str(valor if valor is not None else ''))
+
 def _color_nivel(nivel):
     n = str(nivel).upper()
     if 'ALTO' in n:   return ROJO
@@ -63,7 +70,7 @@ def _tabla_base(data, col_widths):
     ]))
     return t
 
-def generar_reporte_pdf(tipo, datos, url_o_host=''):
+def generar_reporte_pdf(tipo, datos, url_o_host='', fecha=None):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter,
         rightMargin=0.75*inch, leftMargin=0.75*inch,
@@ -81,7 +88,8 @@ def generar_reporte_pdf(tipo, datos, url_o_host=''):
         'puertos': 'Escaneo de Puertos',
         'headers': 'Verificacion de Headers HTTP'
     }
-    now = datetime.datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+    fecha = timezone.localtime(fecha) if fecha else datetime.datetime.now()
+    now = fecha.strftime('%d/%m/%Y %H:%M:%S')
 
     # Encabezado
     story.append(Paragraph('SecureScan', tit))
@@ -90,7 +98,7 @@ def generar_reporte_pdf(tipo, datos, url_o_host=''):
     story.append(Spacer(1, 14))
 
     # Metadatos
-    story.append(Paragraph(nombres.get(tipo, tipo), ss))
+    story.append(Paragraph(_e(nombres.get(tipo, tipo)), ss))
     meta = _tabla_base(
         [['Campo', 'Valor'],
          ['Fecha', now],
@@ -150,11 +158,11 @@ def _logs(story, datos, ss, ns, cs):
             etiqueta = ParagraphStyle('ae', fontSize=10, textColor=col,
                 fontName='Helvetica-Bold', spaceAfter=3)
             story.append(Paragraph(
-                f"[{a.get('nivel')}]  {a.get('tipo')}  —  {a.get('cantidad')} ocurrencias",
+                f"[{_e(a.get('nivel'))}]  {_e(a.get('tipo'))}  —  {_e(a.get('cantidad'))} ocurrencias",
                 etiqueta))
             for d in a.get('detalle', [])[:3]:
                 story.append(Paragraph(
-                    f"    Linea {d.get('linea')}: {str(d.get('contenido',''))[:110]}",
+                    f"    Linea {_e(d.get('linea'))}: {_e(str(d.get('contenido',''))[:110])}",
                     cs))
             story.append(Spacer(1, 5))
 
@@ -209,11 +217,11 @@ def _puertos(story, datos, ss, ns):
         story.append(Paragraph('Recomendaciones de Seguridad', ss))
         for r in recs:
             story.append(Paragraph(
-                f"Puerto :{r.get('puerto')}  —  {r.get('servicio')}",
+                f"Puerto :{_e(r.get('puerto'))}  —  {_e(r.get('servicio'))}",
                 ParagraphStyle('rh', fontSize=10, textColor=ROJO,
                     fontName='Helvetica-Bold', spaceAfter=2)))
             story.append(Paragraph(
-                f"    {r.get('recomendacion','')}",
+                f"    {_e(r.get('recomendacion',''))}",
                 ParagraphStyle('rd', fontSize=9, textColor=GRIS_OSC, spaceAfter=8)))
 
 
@@ -258,7 +266,7 @@ def _headers(story, datos, ss, ns):
             story.append(t2)
         else:
             story.append(Paragraph(
-                f"SSL no disponible: {ssl.get('error','N/A')}",
+                f"SSL no disponible: {_e(ssl.get('error','N/A'))}",
                 ParagraphStyle('se', fontSize=10, textColor=ROJO, spaceAfter=6)))
         story.append(Spacer(1, 8))
 
