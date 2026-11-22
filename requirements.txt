@@ -1,5 +1,5 @@
 # Dependencias de producción, con versiones fijadas (las actualiza Dependabot).
-Django==6.0.10
+Django==6.1.3
 django-environ==0.14.0
 django-ratelimit==4.1.0
 reportlab==5.1.0
