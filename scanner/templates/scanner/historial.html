@@ -1,0 +1,46 @@
+{% extends "scanner/base.html" %}
+{% load securescan %}
+{% block titulo %}Historial{% endblock %}
+{% block body %}
+{% include "scanner/_nav.html" %}
+<main class="container">
+    <h1 class="titulo-pagina">Historial de análisis</h1>
+    {% include "scanner/_mensajes.html" %}
+
+    <div class="filtros">
+        <a href="{% url 'historial' %}"{% if not tipo %} class="activo"{% endif %}>Todos</a>
+        {% for valor, nombre in tipos %}
+            <a href="?tipo={{ valor }}"{% if tipo == valor %} class="activo"{% endif %}>{{ nombre }}</a>
+        {% endfor %}
+    </div>
+
+    {% if pagina.object_list %}
+        <table class="tabla">
+            <thead>
+                <tr><th>Fecha</th><th>Tipo</th><th>Objetivo</th><th>Riesgo</th><th></th></tr>
+            </thead>
+            <tbody>
+            {% for a in pagina.object_list %}
+                <tr>
+                    <td>{{ a.fecha|date:"d/m/Y H:i" }}</td>
+                    <td>{{ a.get_tipo_display }}</td>
+                    <td class="mono">{{ a.objetivo|truncatechars:60 }}</td>
+                    <td><span class="badge-n badge-{{ a.nivel_riesgo|nivel }}">{{ a.nivel_riesgo|nivel }}</span></td>
+                    <td><a class="btn btn-gris btn-peq" href="{% url 'detalle' a.pk %}">Ver</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        {% if pagina.has_other_pages %}
+        <div class="paginacion">
+            {% if pagina.has_previous %}<a class="btn btn-gris btn-peq" href="?{% if tipo %}tipo={{ tipo }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}">← Anterior</a>{% endif %}
+            <span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+            {% if pagina.has_next %}<a class="btn btn-gris btn-peq" href="?{% if tipo %}tipo={{ tipo }}&amp;{% endif %}pagina={{ pagina.next_page_number }}">Siguiente →</a>{% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+        <div class="no-data">Todavía no hay análisis{% if tipo %} de este tipo{% endif %}. <a href="{% url 'home' %}">Haz el primero</a>.</div>
+    {% endif %}
+</main>
+{% endblock %}

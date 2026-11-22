@@ -1,15 +1,20 @@
 """Vistas: autenticación, CSRF, límites de peticiones, validación e IDOR."""
 
+import io
+from datetime import timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 
 from scanner.models import Analisis
 from scanner.port_scanner import ServidorOcupado
+from scanner.templatetags.securescan import nivel
 
 # django-ratelimit usa ventanas fijas de tiempo: si un test cruza el borde de
 # una ventana el contador se reinicia y el test falla de forma intermitente.
@@ -27,6 +32,9 @@ class VistasTests(TestCase):
         self.client.force_login(self.usuario)
 
     def post_json(self, nombre, datos, client=None, **extra):
+        """POST JSON. Añade autorizado=True salvo que el test lo indique."""
+        if isinstance(datos, dict) and nombre in ("escanear", "headers"):
+            datos = {"autorizado": True, **datos}
         return (client or self.client).post(reverse(nombre), datos, content_type="application/json", **extra)
 
     # --- autenticación ---
@@ -191,6 +199,21 @@ class VistasTests(TestCase):
                 self.assertEqual(r.status_code, 200)
                 self.assertIn(f"securescan_{tipo}_{a.pk}.pdf", r["Content-Disposition"])
 
+    def test_autorizacion_obligatoria(self):
+        for nombre, datos in (("escanear", {"host": "8.8.8.8"}), ("headers", {"url": "example.com"})):
+            for autorizado in (None, False, "true", 1):
+                with self.subTest(nombre=nombre, autorizado=autorizado):
+                    cuerpo = dict(datos) if autorizado is None else {**datos, "autorizado": autorizado}
+                    r = self.client.post(reverse(nombre), cuerpo, content_type="application/json")
+                    self.assertEqual(r.status_code, 400)
+                    self.assertIn("autorización", r.json()["error"])
+
+    @mock.patch("scanner.views.escanear_host", return_value={"resumen": {}})
+    def test_escaneo_queda_en_el_registro_de_auditoria(self, _):
+        with self.assertLogs("scanner.views", level="INFO") as logs:
+            self.post_json("escanear", {"host": "8.8.8.8"})
+        self.assertIn(f"usuario={self.usuario.pk} host=8.8.8.8", logs.output[0])
+
 
 class PaginasTests(TestCase):
     """Plantillas, estáticos, CSP y healthcheck."""
@@ -238,3 +261,116 @@ class PaginasTests(TestCase):
         with self.assertLogs("scanner.views", level="ERROR"):
             r = Client().get(reverse("salud"))
         self.assertEqual((r.status_code, r.json()), (503, {"estado": "error"}))
+
+
+class HistorialTests(TestCase):
+    """Historial, detalle, exportación JSON, borrado y retención."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.usuario = User.objects.create_user("ana", password="clave-segura-123")
+        self.otro = User.objects.create_user("beto", password="clave-segura-456")
+        self.client.force_login(self.usuario)
+
+    def crear(self, usuario=None, tipo="logs", objetivo="a.log", nivel_riesgo="ALTO", **resultado):
+        return Analisis.objects.create(
+            usuario=usuario or self.usuario,
+            tipo=tipo,
+            objetivo=objetivo,
+            nivel_riesgo=nivel_riesgo,
+            resultado=resultado or {"resumen": {"nivel_riesgo": nivel_riesgo}},
+        )
+
+    def test_historial_solo_muestra_lo_propio(self):
+        self.crear(objetivo="mio.log")
+        self.crear(usuario=self.otro, objetivo="ajeno.log")
+        r = self.client.get(reverse("historial"))
+        self.assertContains(r, "mio.log")
+        self.assertNotContains(r, "ajeno.log")
+
+    def test_historial_filtra_por_tipo(self):
+        self.crear(tipo="logs", objetivo="access.log")
+        self.crear(tipo="puertos", objetivo="scanme.nmap.org")
+        r = self.client.get(reverse("historial"), {"tipo": "puertos"})
+        self.assertContains(r, "scanme.nmap.org")
+        self.assertNotContains(r, "access.log")
+        # Un tipo desconocido se ignora en vez de fallar.
+        self.assertEqual(self.client.get(reverse("historial"), {"tipo": "<x>"}).status_code, 200)
+
+    def test_historial_paginado(self):
+        for i in range(25):
+            self.crear(objetivo=f"log{i}.log")
+        r = self.client.get(reverse("historial"))
+        self.assertEqual(len(r.context["pagina"].object_list), 20)
+        self.assertContains(r, "Página 1 de 2")
+        r = self.client.get(reverse("historial"), {"pagina": "999"})
+        self.assertEqual(r.context["pagina"].number, 2)
+
+    def test_historial_y_detalle_requieren_login(self):
+        a = self.crear()
+        for url in (reverse("historial"), reverse("detalle", args=[a.pk])):
+            with self.subTest(url=url):
+                self.assertEqual(Client().get(url).status_code, 302)
+
+    def test_detalle_propio(self):
+        a = self.crear(objetivo="<script>x</script>.log")
+        r = self.client.get(reverse("detalle", args=[a.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, 'id="datos-analisis" type="application/json"')
+        self.assertNotContains(r, "<script>x</script>")  # el objetivo se escapa
+        self.assertNotIn("style=", r.content.decode())
+
+    def test_detalle_ajeno_404(self):
+        a = self.crear(usuario=self.otro)
+        self.assertEqual(self.client.get(reverse("detalle", args=[a.pk])).status_code, 404)
+
+    def test_exportar_json(self):
+        a = self.crear(tipo="headers", objetivo="https://ejemplo.com")
+        r = self.client.get(reverse("exportar_json", args=[a.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn(f"securescan_headers_{a.pk}.json", r["Content-Disposition"])
+        datos = r.json()
+        self.assertEqual(
+            (datos["id"], datos["tipo"], datos["objetivo"]), (a.pk, "headers", "https://ejemplo.com")
+        )
+
+    def test_exportar_json_ajeno_y_anonimo(self):
+        a = self.crear(usuario=self.otro)
+        self.assertEqual(self.client.get(reverse("exportar_json", args=[a.pk])).status_code, 404)
+        self.assertEqual(Client().get(reverse("exportar_json", args=[a.pk])).status_code, 401)
+
+    def test_eliminar(self):
+        a = self.crear()
+        r = self.client.post(reverse("eliminar", args=[a.pk]), follow=True)
+        self.assertRedirects(r, reverse("historial"))
+        self.assertContains(r, "Análisis eliminado")
+        self.assertFalse(Analisis.objects.filter(pk=a.pk).exists())
+
+    def test_eliminar_solo_por_post_y_solo_lo_propio(self):
+        propio, ajeno = self.crear(), self.crear(usuario=self.otro)
+        self.assertEqual(self.client.get(reverse("eliminar", args=[propio.pk])).status_code, 405)
+        self.assertEqual(self.client.post(reverse("eliminar", args=[ajeno.pk])).status_code, 404)
+        self.assertTrue(Analisis.objects.filter(pk=ajeno.pk).exists())
+
+    def test_eliminar_exige_csrf(self):
+        a = self.crear()
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.usuario)
+        self.assertEqual(c.post(reverse("eliminar", args=[a.pk])).status_code, 403)
+        self.assertTrue(Analisis.objects.filter(pk=a.pk).exists())
+
+    def test_purgar_analisis_antiguos(self):
+        viejo, reciente = self.crear(objetivo="viejo.log"), self.crear(objetivo="reciente.log")
+        Analisis.objects.filter(pk=viejo.pk).update(fecha=timezone.now() - timedelta(days=100))
+        salida = io.StringIO()
+        call_command("purgar_analisis", "--dias", "90", "--simular", stdout=salida)
+        self.assertIn("Se borrarían 1", salida.getvalue())
+        self.assertEqual(Analisis.objects.count(), 2)
+        call_command("purgar_analisis", "--dias", "90", stdout=io.StringIO())
+        self.assertEqual(list(Analisis.objects.values_list("pk", flat=True)), [reciente.pk])
+
+    def test_filtro_nivel(self):
+        self.assertEqual(
+            [nivel(v) for v in ("ALTO", "MEDIO 🟡", "", None, '"><x>')],
+            ["ALTO", "MEDIO", "BAJO", "BAJO", "BAJO"],
+        )

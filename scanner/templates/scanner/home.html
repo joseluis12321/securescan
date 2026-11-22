@@ -48,6 +48,7 @@
                 <input class="input-field input-small" type="text" id="inputPuertosExtra" placeholder="8000,9000" autocomplete="off">
                 <button class="btn btn-blue" type="submit">Escanear</button>
             </div>
+            <label class="autorizacion"><input type="checkbox" id="autorizadoPuertos" required> Confirmo que este host es mío o que tengo autorización explícita de su propietario para escanearlo.</label>
         </form>
         <div class="loader" id="loader-puertos" hidden><div class="spinner"></div><p>Escaneando puertos...</p></div>
         <div class="result-box" id="result-puertos" hidden></div>
@@ -67,6 +68,7 @@
                 <input class="input-field" type="text" id="inputUrl" placeholder="github.com o https://example.com" required maxlength="2048" autocomplete="off">
                 <button class="btn btn-blue" type="submit">Verificar</button>
             </div>
+            <label class="autorizacion"><input type="checkbox" id="autorizadoHeaders" required> Confirmo que este sitio es mío o que tengo autorización para analizarlo.</label>
         </form>
         <div class="loader" id="loader-headers" hidden><div class="spinner"></div><p>Verificando seguridad...</p></div>
         <div class="result-box" id="result-headers" hidden></div>

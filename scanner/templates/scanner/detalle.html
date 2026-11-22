@@ -1,0 +1,32 @@
+{% extends "scanner/base.html" %}
+{% load static securescan %}
+{% block titulo %}{{ analisis.get_tipo_display }}{% endblock %}
+{% block head %}
+    {{ config|json_script:"config-securescan" }}
+    {{ datos|json_script:"datos-analisis" }}
+    <script src="{% static 'scanner/js/app.js' %}" defer></script>
+{% endblock %}
+{% block body %}
+{% include "scanner/_nav.html" %}
+<main class="container">
+    <h1 class="titulo-pagina">{{ analisis.get_tipo_display }}</h1>
+    <div class="card">
+        <div class="ssl-grid">
+            <div class="ssl-item"><div class="k">Objetivo</div><div class="v mono">{{ analisis.objetivo }}</div></div>
+            <div class="ssl-item"><div class="k">Fecha</div><div class="v">{{ analisis.fecha|date:"d/m/Y H:i:s" }}</div></div>
+            <div class="ssl-item"><div class="k">Nivel de riesgo</div><div class="v txt-{{ analisis.nivel_riesgo|nivel }}">{{ analisis.nivel_riesgo|nivel }}</div></div>
+            <div class="ssl-item"><div class="k">Identificador</div><div class="v">#{{ analisis.pk }}</div></div>
+        </div>
+        <div class="acciones">
+            <a class="btn btn-pdf" href="{% url 'exportar_pdf' analisis.pk %}">&#128196; Exportar PDF</a>
+            <a class="btn btn-blue" href="{% url 'exportar_json' analisis.pk %}">&#123;&#125; Exportar JSON</a>
+            <form method="post" action="{% url 'eliminar' analisis.pk %}" data-confirmar="¿Eliminar este análisis? No se puede deshacer.">
+                {% csrf_token %}
+                <button class="btn btn-red" type="submit">Eliminar</button>
+            </form>
+        </div>
+    </div>
+    <div class="result-box" id="resultado-detalle"></div>
+    <p class="aviso-legal"><a href="{% url 'historial' %}">← Volver al historial</a></p>
+</main>
+{% endblock %}

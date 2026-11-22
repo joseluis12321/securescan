@@ -258,6 +258,9 @@ SECURESCAN_MAX_LOG_MB = env.int('SECURESCAN_MAX_LOG_MB', default=10)
 # Máximo de puertos extra que se pueden pedir en un escaneo.
 SECURESCAN_MAX_PUERTOS_EXTRA = 100
 
+# Días que se conservan los análisis (comando: manage.py purgar_analisis).
+SECURESCAN_RETENCION_DIAS = env.int('SECURESCAN_RETENCION_DIAS', default=90)
+
 # Escaneos de puertos simultáneos en todo el servidor (por proceso).
 SECURESCAN_MAX_ESCANEOS_SIMULTANEOS = env.int('SECURESCAN_MAX_ESCANEOS_SIMULTANEOS', default=4)
 

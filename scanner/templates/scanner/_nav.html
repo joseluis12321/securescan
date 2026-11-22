@@ -3,6 +3,7 @@
     <div class="badge">v2.0 Defensivo</div>
     <div class="nav-enlaces">
         <a href="{% url 'home' %}"{% if request.resolver_match.url_name == 'home' %} class="activo"{% endif %}>Análisis</a>
+        <a href="{% url 'historial' %}"{% if request.resolver_match.url_name == 'historial' or request.resolver_match.url_name == 'detalle' %} class="activo"{% endif %}>Historial</a>
     </div>
     <div class="usuario">
         <span>&#128100; {{ user.get_username }}</span>

@@ -74,7 +74,8 @@ input[type=file] { display: none; }
 .btn-peq { padding: 6px 14px; font-size: 12px; }
 .btn-full { width: 100%; margin-top: 12px; padding: 13px; font-size: 15px; }
 .acciones { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-.acciones .btn { flex: 1; }
+.acciones .btn, .acciones form { flex: 1; }
+.acciones form { display: flex; }
 .input-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .input-field { flex: 1; min-width: 200px; background: var(--panel-oscuro); border: 1px solid var(--borde-claro); border-radius: 8px; padding: 10px 14px; color: var(--texto); font-size: 14px; outline: none; }
 .input-field:focus { border-color: var(--azul); }

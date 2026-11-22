@@ -4,12 +4,14 @@ import re
 from functools import wraps
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.core.cache import cache
+from django.core.paginator import Paginator
 from django.db import connection
 from django.http import Http404, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.views.decorators.http import require_GET, require_POST
@@ -109,6 +111,32 @@ def _lineas(archivo):
         yield bruta.decode("utf-8", errors="replace").rstrip("\r\n")
 
 
+def _exigir_autorizacion(data: dict):
+    """El usuario debe declarar que el objetivo es suyo o que tiene permiso para analizarlo."""
+    if data.get("autorizado") is not True:
+        raise EntradaInvalida("Debes confirmar que tienes autorización para analizar este objetivo")
+
+
+def _analisis_del_usuario(request, pk) -> Analisis:
+    # Filtrar por usuario impide acceder a análisis ajenos (IDOR).
+    return get_object_or_404(Analisis, pk=pk, usuario=request.user)
+
+
+def _config_frontend() -> dict:
+    return {
+        "maxLogMb": settings.SECURESCAN_MAX_LOG_MB,
+        "urls": {
+            "analizar": reverse("analizar"),
+            "escanear": reverse("escanear"),
+            "headers": reverse("headers"),
+            "pdf": reverse("exportar_pdf", args=[0]),
+            "json": reverse("exportar_json", args=[0]),
+            "detalle": reverse("detalle", args=[0]),
+            "login": reverse("login"),
+        },
+    }
+
+
 def _guardar(request, tipo, objetivo, resultado):
     return Analisis.objects.create(
         usuario=request.user,
@@ -144,17 +172,47 @@ class LoginConLimite(LoginView):
 
 @login_required
 def home(request):
-    config = {
-        "maxLogMb": settings.SECURESCAN_MAX_LOG_MB,
-        "urls": {
-            "analizar": reverse("analizar"),
-            "escanear": reverse("escanear"),
-            "headers": reverse("headers"),
-            "pdf": reverse("exportar_pdf", args=[0]),
-            "login": reverse("login"),
-        },
-    }
-    return render(request, "scanner/home.html", {"config": config})
+    return render(request, "scanner/home.html", {"config": _config_frontend()})
+
+
+@login_required
+@require_GET
+def historial(request):
+    analisis = Analisis.objects.filter(usuario=request.user).only(
+        "id", "tipo", "objetivo", "nivel_riesgo", "fecha"
+    )
+    tipo = request.GET.get("tipo", "")
+    if tipo in Analisis.Tipo.values:
+        analisis = analisis.filter(tipo=tipo)
+    else:
+        tipo = ""
+    pagina = Paginator(analisis, 20).get_page(request.GET.get("pagina"))
+    return render(
+        request,
+        "scanner/historial.html",
+        {"pagina": pagina, "tipo": tipo, "tipos": Analisis.Tipo.choices},
+    )
+
+
+@login_required
+@require_GET
+def detalle(request, pk):
+    analisis = _analisis_del_usuario(request, pk)
+    datos = {"tipo": analisis.tipo, "resultado": analisis.resultado}
+    return render(
+        request,
+        "scanner/detalle.html",
+        {"analisis": analisis, "datos": datos, "config": _config_frontend()},
+    )
+
+
+@login_required
+@require_POST
+def eliminar(request, pk):
+    analisis = _analisis_del_usuario(request, pk)
+    analisis.delete()
+    messages.success(request, "Análisis eliminado.")
+    return redirect("historial")
 
 
 @require_GET
@@ -195,6 +253,9 @@ def escanear_puertos(request):
     if not isinstance(host, str) or not host.strip():
         raise EntradaInvalida("Host requerido")
 
+    _exigir_autorizacion(data)
+
+    logger.info("Escaneo de puertos: usuario=%s host=%s", request.user.pk, host.strip())
     resultado = escanear_host(host.strip(), data.get("puertos_extra", []))
     analisis = _guardar(request, Analisis.Tipo.PUERTOS, host.strip(), resultado)
     return JsonResponse({"success": True, "id": analisis.id, "resultado": resultado})
@@ -209,6 +270,9 @@ def verificar_headers(request):
     if not isinstance(url, str) or not url.strip():
         raise EntradaInvalida("URL requerida")
 
+    _exigir_autorizacion(data)
+
+    logger.info("Verificación de headers: usuario=%s url=%s", request.user.pk, url.strip())
     resultado = _verificar_headers(url.strip())
     if "error" in resultado:
         # Fallo al contactar con el sitio (no es culpa de la petición).
@@ -221,8 +285,7 @@ def verificar_headers(request):
 @vista_api
 @ratelimit(key="user_or_ip", rate=settings.SECURESCAN_RATE_PDF, block=True)
 def exportar_pdf(request, pk):
-    # Filtrar por usuario impide descargar reportes ajenos (IDOR).
-    analisis = get_object_or_404(Analisis, pk=pk, usuario=request.user)
+    analisis = _analisis_del_usuario(request, pk)
     buffer = generar_reporte_pdf(analisis.tipo, analisis.resultado, analisis.objetivo, fecha=analisis.fecha)
     return HttpResponse(
         buffer,
@@ -231,3 +294,22 @@ def exportar_pdf(request, pk):
             "Content-Disposition": f'attachment; filename="securescan_{analisis.tipo}_{analisis.pk}.pdf"'
         },
     )
+
+
+@require_GET
+@vista_api
+@ratelimit(key="user_or_ip", rate=settings.SECURESCAN_RATE_PDF, block=True)
+def exportar_json(request, pk):
+    analisis = _analisis_del_usuario(request, pk)
+    contenido = {
+        "generado_por": "SecureScan",
+        "id": analisis.pk,
+        "tipo": analisis.tipo,
+        "objetivo": analisis.objetivo,
+        "fecha": analisis.fecha.isoformat(),
+        "nivel_riesgo": analisis.nivel_riesgo,
+        "resultado": analisis.resultado,
+    }
+    respuesta = JsonResponse(contenido, json_dumps_params={"ensure_ascii": False, "indent": 2})
+    respuesta["Content-Disposition"] = f'attachment; filename="securescan_{analisis.tipo}_{analisis.pk}.json"'
+    return respuesta

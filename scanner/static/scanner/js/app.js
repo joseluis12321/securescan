@@ -287,7 +287,9 @@ const SecureScan = (() => {
 
     function accionesResultado(id) {
         return html`
-            <a class="btn btn-pdf" href="${urlDe(CONFIG.urls.pdf, id)}">📄 Exportar PDF</a>`;
+            <a class="btn btn-pdf" href="${urlDe(CONFIG.urls.pdf, id)}">📄 Exportar PDF</a>
+            <a class="btn btn-blue" href="${urlDe(CONFIG.urls.json, id)}">{} Exportar JSON</a>
+            <a class="btn btn-gris" href="${urlDe(CONFIG.urls.detalle, id)}">Ver en el historial</a>`;
     }
 
     /** Flujo común: mostrar carga, llamar al servidor y pintar el resultado o el error. */
@@ -376,13 +378,36 @@ const SecureScan = (() => {
             const extra = $('inputPuertosExtra').value.trim();
             const puertos = extra ? extra.split(',').map((p) => parseInt(p.trim(), 10)).filter((p) => !Number.isNaN(p)) : [];
             if (!host) return;
-            ejecutar('puertos', () => postJSON(CONFIG.urls.escanear, { host, puertos_extra: puertos }));
+            const autorizado = $('autorizadoPuertos').checked;
+            ejecutar('puertos', () => postJSON(CONFIG.urls.escanear, { host, puertos_extra: puertos, autorizado }));
         });
         $('form-headers').addEventListener('submit', (e) => {
             e.preventDefault();
             const url = $('inputUrl').value.trim();
             if (!url) return;
-            ejecutar('headers', () => postJSON(CONFIG.urls.headers, { url }));
+            const autorizado = $('autorizadoHeaders').checked;
+            ejecutar('headers', () => postJSON(CONFIG.urls.headers, { url, autorizado }));
+        });
+    }
+
+    // ---------------------------------------------------------------------
+    // Página de detalle de un análisis guardado
+    // ---------------------------------------------------------------------
+    function iniciarDetalle() {
+        const nodo = $('datos-analisis');
+        const destino = $('resultado-detalle');
+        if (!nodo || !destino) return;
+        const { tipo, resultado } = JSON.parse(nodo.textContent);
+        const render = RENDER[tipo];
+        pintar(destino, render ? render(resultado || {}) : vacio('Tipo de análisis desconocido', 'error'));
+    }
+
+    /** Formularios con data-confirmar piden confirmación antes de enviarse. */
+    function iniciarConfirmaciones() {
+        document.querySelectorAll('form[data-confirmar]').forEach((form) => {
+            form.addEventListener('submit', (e) => {
+                if (!window.confirm(form.dataset.confirmar)) e.preventDefault();
+            });
         });
     }
 
@@ -392,6 +417,8 @@ const SecureScan = (() => {
             iniciarLogs();
             iniciarFormularios();
         }
+        iniciarDetalle();
+        iniciarConfirmaciones();
     }
 
     document.addEventListener('DOMContentLoaded', iniciar);
