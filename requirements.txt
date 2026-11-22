@@ -9,7 +9,7 @@ psycopg[binary]==3.3.9
 redis==8.1.0
 
 # Transitivas
-asgiref==3.11.1
+asgiref==3.13.0
 sqlparse==0.6.1
 pillow==13.0.0
 charset-normalizer==3.4.7
