@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Analisis(models.Model):
-    """Resultado de cualquier análisis (logs, puertos o headers) de un usuario.
+    """Resultado de cualquier análisis (logs, puertos, headers o auditoría web) de un usuario.
 
     Los reportes PDF se generan siempre a partir de estos registros, nunca a
     partir de datos enviados por el cliente.
@@ -13,6 +13,7 @@ class Analisis(models.Model):
         LOGS = "logs", "Análisis de logs"
         PUERTOS = "puertos", "Escaneo de puertos"
         HEADERS = "headers", "Verificación de headers HTTP"
+        WEB = "web", "Auditoría web"
 
     # null=True solo para conservar análisis antiguos creados antes del login.
     usuario = models.ForeignKey(

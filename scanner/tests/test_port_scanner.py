@@ -70,3 +70,19 @@ class EscanerTests(SimpleTestCase):
         self.assertEqual(_limpiar_banner(b"220 FTP listo\r\n"), "220 FTP listo")
         self.assertIsNone(_limpiar_banner(b"\x00\x01\xff"))
         self.assertEqual(len(_limpiar_banner(b"A" * 500)), 120)
+
+
+class ExplicacionPuertosTests(SimpleTestCase):
+    def test_todos_los_puertos_comunes_tienen_explicacion(self):
+        self.assertEqual(set(port_scanner.EXPLICACION_PUERTOS), set(port_scanner.PUERTOS_COMUNES))
+        for puerto in port_scanner.PUERTOS_COMUNES:
+            with self.subTest(puerto=puerto):
+                info = port_scanner.explicar_puerto(puerto)
+                self.assertEqual(set(info), {"que_es", "riesgo", "recomendacion"})
+                self.assertTrue(all(len(v) > 20 for v in info.values()))
+
+    def test_puerto_desconocido(self):
+        info = port_scanner.explicar_puerto(4444, "Personalizado")
+        self.assertIn("Personalizado", info["que_es"])
+        self.assertIn("4444", info["que_es"])
+        self.assertIn("desconocido", port_scanner.explicar_puerto(4444)["que_es"])

@@ -33,7 +33,7 @@ class VistasTests(TestCase):
 
     def post_json(self, nombre, datos, client=None, **extra):
         """POST JSON. Añade autorizado=True salvo que el test lo indique."""
-        if isinstance(datos, dict) and nombre in ("escanear", "headers"):
+        if isinstance(datos, dict) and nombre in ("escanear", "headers", "auditoria"):
             datos = {"autorizado": True, **datos}
         return (client or self.client).post(reverse(nombre), datos, content_type="application/json", **extra)
 
@@ -163,6 +163,61 @@ class VistasTests(TestCase):
             self.assertEqual(self.post_json("escanear", {"host": "127.0.0.1"}).status_code, 400)
         self.assertEqual(self.post_json("escanear", {"host": "127.0.0.1"}).status_code, 429)
 
+    # --- auditoría web ---
+    def test_auditoria_requiere_login_y_url(self):
+        self.assertEqual(
+            self.post_json("auditoria", {"url": "example.com"}, client=Client()).status_code, 401
+        )
+        for datos in ({}, {"url": ""}, {"url": 123}):
+            with self.subTest(datos=datos):
+                self.assertEqual(self.post_json("auditoria", datos).status_code, 400)
+        self.assertEqual(self.client.get(reverse("auditoria")).status_code, 405)
+
+    def test_auditoria_metadatos_bloqueada(self):
+        """Sin mocks: la protección SSRF frena la URL antes de cualquier conexión."""
+        with self.assertLogs("scanner.views", level="WARNING") as logs:
+            r = self.post_json("auditoria", {"url": "http://169.254.169.254/latest/meta-data/"})
+        self.assertEqual(r.status_code, 400)
+        self.assertIn("no permitido", r.json()["error"])
+        self.assertIn("SSRF bloqueado", logs.output[-1])
+        self.assertFalse(Analisis.objects.exists())
+
+    @mock.patch("scanner.views.auditar")
+    def test_auditoria_valida_se_guarda(self, auditar):
+        auditar.return_value = {
+            "url": "https://ejemplo.com",
+            "nota": 6.5,
+            "resumen": {"nivel_riesgo": "MEDIO"},
+        }
+        with self.assertLogs("scanner.views", level="INFO") as logs:
+            r = self.post_json("auditoria", {"url": "  ejemplo.com "})
+        self.assertEqual(r.status_code, 200)
+        auditar.assert_called_once_with("ejemplo.com")
+        a = Analisis.objects.get(pk=r.json()["id"])
+        self.assertEqual(
+            (a.tipo, a.usuario, a.objetivo, a.nivel_riesgo),
+            ("web", self.usuario, "https://ejemplo.com", "MEDIO"),
+        )
+        self.assertEqual(r.json()["resultado"]["nota"], 6.5)
+        self.assertIn(f"usuario={self.usuario.pk} url=ejemplo.com", logs.output[0])
+
+    @mock.patch("scanner.views.auditar", return_value={"error": "No se pudo conectar"})
+    def test_auditoria_sitio_caido(self, _):
+        r = self.post_json("auditoria", {"url": "ejemplo.com"})
+        self.assertEqual(r.status_code, 502)
+        self.assertFalse(Analisis.objects.exists())
+
+    @mock.patch("scanner.views.auditar", side_effect=ServidorOcupado("ocupado"))
+    def test_auditoria_servidor_ocupado(self, _):
+        self.assertEqual(self.post_json("auditoria", {"url": "ejemplo.com"}).status_code, 503)
+
+    @VENTANA_FIJA
+    @mock.patch("scanner.views.auditar", return_value={"error": "caído"})
+    def test_rate_limit_auditoria(self, _auditar, _ventana):
+        for _ in range(5):
+            self.assertEqual(self.post_json("auditoria", {"url": "ejemplo.com"}).status_code, 502)
+        self.assertEqual(self.post_json("auditoria", {"url": "ejemplo.com"}).status_code, 429)
+
     # --- errores ---
     @mock.patch("scanner.views.escanear_host", side_effect=ServidorOcupado("ocupado"))
     def test_servidor_ocupado_devuelve_503(self, _):
@@ -192,7 +247,7 @@ class VistasTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_pdf_de_cada_tipo(self):
-        for tipo in ("logs", "puertos", "headers"):
+        for tipo in ("logs", "puertos", "headers", "web"):
             with self.subTest(tipo=tipo):
                 a = Analisis.objects.create(usuario=self.usuario, tipo=tipo, objetivo="x", resultado={})
                 r = self.client.get(reverse("exportar_pdf", args=[a.pk]))
@@ -200,7 +255,11 @@ class VistasTests(TestCase):
                 self.assertIn(f"securescan_{tipo}_{a.pk}.pdf", r["Content-Disposition"])
 
     def test_autorizacion_obligatoria(self):
-        for nombre, datos in (("escanear", {"host": "8.8.8.8"}), ("headers", {"url": "example.com"})):
+        for nombre, datos in (
+            ("escanear", {"host": "8.8.8.8"}),
+            ("headers", {"url": "example.com"}),
+            ("auditoria", {"url": "example.com"}),
+        ):
             for autorizado in (None, False, "true", 1):
                 with self.subTest(nombre=nombre, autorizado=autorizado):
                     cuerpo = dict(datos) if autorizado is None else {**datos, "autorizado": autorizado}
@@ -234,6 +293,9 @@ class PaginasTests(TestCase):
         self.assertNotIn("style=", html)
         self.assertIn('id="config-securescan" type="application/json"', html)
         self.assertEqual(r.context["config"]["urls"]["escanear"], reverse("escanear"))
+        self.assertEqual(r.context["config"]["urls"]["auditoria"], reverse("auditoria"))
+        self.assertIn('id="form-web"', html)
+        self.assertIn('id="autorizadoWeb" required', html)
 
     def test_login_sin_inline(self):
         html = self.client.get(reverse("login")).content.decode()

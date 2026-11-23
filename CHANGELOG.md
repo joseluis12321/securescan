@@ -1,5 +1,19 @@
 # Changelog
 
+## [Sin publicar]
+
+### Añadido
+- **Auditoría web pasiva y modular** (`/auditoria/`, pestaña «Auditoría web»): cada comprobación es una clase que se registra sola en un catálogo y devuelve gravedad, estado, evidencia, explicación para no técnicos, recomendación y referencia.
+- Nota global del 1 al 10 según la gravedad de los fallos, con topes por fallos altos y críticos.
+- Categoría de cabeceras HTTP: HSTS, CSP (también en `<meta>`), X-Frame-Options/`frame-ancestors`, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, X-XSS-Protection, versión en `Server` y cabeceras como `X-Powered-By`.
+- Cliente HTTP pasivo: solo GET/HEAD, 5 peticiones por segundo, 60 por auditoría, 45 s en total, lectura limitada y User-Agent propio.
+- Resultados y PDF agrupados por categoría, con la explicación, la evidencia y la recomendación de cada comprobación.
+- El PDF del escaneo de puertos explica cada puerto abierto (qué es, riesgo y recomendación).
+
+### Cambiado
+- `http_seguro.solicitar()` admite HEAD, peticiones sin seguir redirecciones y lectura limitada del cuerpo.
+- Los títulos de sección del PDF ya no se quedan solos al final de una página.
+
 ## [2.0.0] — 2026-11-22
 
 ### Seguridad

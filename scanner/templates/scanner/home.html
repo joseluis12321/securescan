@@ -12,6 +12,7 @@
         <button class="tab active" type="button" role="tab" aria-selected="true" data-tab="logs">&#128269; Analizador de Logs</button>
         <button class="tab" type="button" role="tab" aria-selected="false" data-tab="puertos">&#128268; Escáner de Puertos</button>
         <button class="tab" type="button" role="tab" aria-selected="false" data-tab="headers">&#128274; Headers HTTP</button>
+        <button class="tab" type="button" role="tab" aria-selected="false" data-tab="web">&#127760; Auditoría web</button>
     </div>
 
     <!-- LOGS -->
@@ -73,6 +74,26 @@
         <div class="loader" id="loader-headers" hidden><div class="spinner"></div><p>Verificando seguridad...</p></div>
         <div class="result-box" id="result-headers" hidden></div>
         <div class="acciones" id="acciones-headers" hidden></div>
+    </section>
+
+    <!-- AUDITORÍA WEB -->
+    <section class="panel" id="panel-web" role="tabpanel">
+        <div class="hero">
+            <h2>Auditoría <span>web</span></h2>
+            <p>Revisa la configuración de seguridad de un sitio con comprobaciones pasivas, explicadas en lenguaje sencillo y con una nota del 1 al 10</p>
+        </div>
+        <form class="card" id="form-web">
+            <h3>Sitio web a auditar</h3>
+            <p>URL o dominio. Solo se hacen peticiones normales (GET/HEAD), sin ataques ni pruebas que puedan dañar el sitio.</p>
+            <div class="input-row">
+                <input class="input-field" type="text" id="inputUrlWeb" placeholder="github.com o https://example.com" required maxlength="2048" autocomplete="off">
+                <button class="btn btn-blue" type="submit">Auditar</button>
+            </div>
+            <label class="autorizacion"><input type="checkbox" id="autorizadoWeb" required> Confirmo que este sitio es mío o que tengo autorización de su propietario para auditarlo.</label>
+        </form>
+        <div class="loader" id="loader-web" hidden><div class="spinner"></div><p>Auditando el sitio... puede tardar unos segundos</p></div>
+        <div class="result-box" id="result-web" hidden></div>
+        <div class="acciones" id="acciones-web" hidden></div>
     </section>
 </main>
 {% endblock %}

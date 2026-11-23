@@ -15,10 +15,21 @@ from reportlab.lib.enums import TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    HRFlowable,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+
+from .port_scanner import explicar_puerto
 
 AZUL = colors.HexColor('#1a56db')
 ROJO = colors.HexColor('#e02424')
+ROJO_OSCURO = colors.HexColor('#9b1c1c')
 VERDE = colors.HexColor('#057a55')
 NARANJA = colors.HexColor('#d97706')
 NEGRO = colors.HexColor('#111827')
@@ -33,7 +44,18 @@ NOMBRES = {
     'logs': 'Análisis de Logs',
     'puertos': 'Escaneo de Puertos',
     'headers': 'Verificación de Headers HTTP',
+    'web': 'Auditoría Web',
 }
+
+# Auditoría web: textos y colores de gravedad y estado (nunca se usa texto libre como clave).
+GRAVEDADES = {
+    'critica': ('Crítica', ROJO_OSCURO),
+    'alta': ('Alta', ROJO),
+    'media': ('Media', NARANJA),
+    'baja': ('Baja', AZUL),
+    'info': ('Info', GRIS_MED),
+}
+ESTADOS = {'fallo': 'FALLO', 'ok': 'OK', 'no_aplica': 'NO APLICA'}
 
 ESTILOS = {
     'titulo': ParagraphStyle(
@@ -46,8 +68,15 @@ ESTILOS = {
         leading=30,
     ),
     'sub': ParagraphStyle('sub', fontSize=11, textColor=GRIS_MED, alignment=TA_CENTER, spaceAfter=20),
+    # keepWithNext: un título nunca se queda solo al final de una página.
     'seccion': ParagraphStyle(
-        'seccion', fontSize=13, textColor=AZUL, fontName='Helvetica-Bold', spaceBefore=16, spaceAfter=8
+        'seccion',
+        fontSize=13,
+        textColor=AZUL,
+        fontName='Helvetica-Bold',
+        spaceBefore=16,
+        spaceAfter=8,
+        keepWithNext=1,
     ),
     'normal': ParagraphStyle('normal', fontSize=10, textColor=NEGRO, spaceAfter=5, leading=14),
     'codigo': ParagraphStyle(
@@ -60,6 +89,8 @@ ESTILOS = {
     'detalle': ParagraphStyle(
         'detalle', fontSize=9, textColor=GRIS_OSC, spaceAfter=8, leftIndent=12, leading=12
     ),
+    'campo': ParagraphStyle('campo', fontSize=9, textColor=GRIS_OSC, spaceAfter=3, leftIndent=12, leading=12),
+    'nota': ParagraphStyle('nota', fontSize=8, textColor=GRIS_MED, spaceAfter=6, leading=11),
 }
 
 
@@ -173,7 +204,8 @@ def generar_reporte_pdf(tipo, datos, url_o_host='', fecha=None) -> io.BytesIO:
         Spacer(1, 10),
     ]
 
-    {'logs': _logs, 'puertos': _puertos, 'headers': _headers}.get(tipo, lambda *_: None)(story, datos)
+    secciones = {'logs': _logs, 'puertos': _puertos, 'headers': _headers, 'web': _web}
+    secciones.get(tipo, lambda *_: None)(story, datos)
 
     story += [
         Spacer(1, 24),
@@ -283,14 +315,50 @@ def _puertos(story, datos):
         )
         story.append(Spacer(1, 10))
 
-    recs = datos.get('recomendaciones', [])
-    if recs:
-        story.append(Paragraph('Recomendaciones de Seguridad', ESTILOS['seccion']))
-        for r in recs:
-            story.append(
-                _parrafo_con_color(f"Puerto :{_e(r.get('puerto'))}  —  {_e(r.get('servicio'))}", ROJO)
-            )
-            story.append(Paragraph(_e(r.get('recomendacion', '')), ESTILOS['detalle']))
+        _seccion_con_bloques(story, 'Detalle por Puerto', [_detalle_puerto(p) for p in puertos])
+
+
+def _seccion_con_bloques(story, titulo: str, bloques: list[list]):
+    """Añade un título y bloques que no se parten entre páginas.
+
+    El título va dentro del primer bloque: keepWithNext no funciona cuando lo
+    siguiente es un KeepTogether, y el título se quedaría solo al final de una página.
+    """
+    encabezado = Paragraph(_e(titulo), ESTILOS['seccion'])
+    if not bloques:
+        story.append(encabezado)
+        return
+    bloques[0].insert(0, encabezado)
+    story.extend(KeepTogether(bloque) for bloque in bloques)
+
+
+def _campo(etiqueta: str, texto) -> Paragraph:
+    return Paragraph(f'<b>{_e(etiqueta)}:</b> {_e(texto)}', ESTILOS['campo'])
+
+
+def _detalle_puerto(p: dict) -> list:
+    """Qué es el servicio, su riesgo y la recomendación. Se calcula al generar el PDF,
+    así también funciona con escaneos guardados antes de existir estas explicaciones."""
+    try:
+        numero = int(p.get('puerto'))
+    except (TypeError, ValueError):
+        numero = 0
+    info = explicar_puerto(numero, str(p.get('servicio') or ''))
+    peligroso = bool(p.get('peligroso'))
+    estado = 'RIESGO' if peligroso else 'ABIERTO'
+    bloque = [
+        _parrafo_con_color(
+            f"Puerto :{_e(p.get('puerto'))}  —  {_e(p.get('servicio'))}  [{estado}]",
+            ROJO if peligroso else AZUL,
+        ),
+        _campo('Qué es', info['que_es']),
+        _campo('Riesgo', info['riesgo']),
+        _campo('Recomendación', info['recomendacion']),
+    ]
+    if p.get('banner'):
+        bloque.append(_campo('Servicio identificado (banner)', p['banner']))
+    bloque.append(Spacer(1, 8))
+    return bloque
 
 
 def _texto_redireccion(valor) -> str:
@@ -384,3 +452,87 @@ def _headers(story, datos):
                 ]
             )
         story.append(_tabla(filas, [0.18, 0.27, 0.27, 0.28]))
+
+
+def _numero(valor, por_defecto=0.0) -> float:
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        return por_defecto
+
+
+def _formatear_nota(nota: float) -> str:
+    return f'{nota:.1f}'.replace('.', ',')
+
+
+def _comprobacion(c: dict) -> list:
+    estado = c.get('estado') if c.get('estado') in ESTADOS else 'no_aplica'
+    nombre_gravedad, color_gravedad = GRAVEDADES.get(c.get('gravedad'), GRAVEDADES['info'])
+    if estado == 'fallo':
+        etiqueta, color = f'FALLO · {nombre_gravedad}', color_gravedad
+    else:
+        etiqueta, color = ESTADOS[estado], VERDE if estado == 'ok' else GRIS_MED
+
+    bloque = [
+        _parrafo_con_color(f'[{_e(etiqueta)}]  {_e(c.get("titulo"))}', color),
+        _campo('Qué significa', c.get('explicacion', '')),
+        _campo('Evidencia', c.get('evidencia', '')),
+        _campo('Recomendación', c.get('recomendacion', '')),
+    ]
+    referencia = str(c.get('referencia') or '')
+    if referencia.startswith('https://'):
+        enlace = escape(referencia, quote=True)
+        bloque.append(
+            Paragraph(
+                f'<b>Referencia:</b> <a href="{enlace}" color="#1a56db">{_e(referencia)}</a>',
+                ESTILOS['campo'],
+            )
+        )
+    bloque.append(Spacer(1, 8))
+    return bloque
+
+
+def _web(story, datos):
+    resumen = datos.get('resumen', {})
+    nota = max(1.0, min(10.0, _numero(datos.get('nota', resumen.get('nota')), 1.0)))
+    por_gravedad = resumen.get('fallos_por_gravedad', {})
+    texto_gravedad = ' · '.join(
+        f'{nombre}: {int(_numero(por_gravedad.get(clave)))}' for clave, (nombre, _c) in GRAVEDADES.items()
+    )
+
+    story.append(Paragraph('Resumen de la Auditoría', ESTILOS['seccion']))
+    _resumen(
+        story,
+        [
+            ['Indicador', 'Valor'],
+            ['Nivel de riesgo', _nivel(resumen.get('nivel_riesgo'))],
+            ['Nota global', f'{_formatear_nota(nota)} / 10'],
+            ['URL analizada', datos.get('url', '')],
+            ['URL final (tras redirecciones)', datos.get('url_final', '—')],
+            ['Código de estado', datos.get('codigo_estado', '—')],
+            [
+                'Comprobaciones',
+                f"{int(_numero(resumen.get('total')))} en total: "
+                f"{int(_numero(resumen.get('ok')))} correctas, "
+                f"{int(_numero(resumen.get('fallos')))} con fallos, "
+                f"{int(_numero(resumen.get('no_aplica')))} no aplican",
+            ],
+            ['Fallos por gravedad', texto_gravedad],
+        ],
+    )
+    peticiones = int(_numero(datos.get('peticiones')))
+    hechas = (
+        'se hizo 1 petición normal' if peticiones == 1 else f'se hicieron {peticiones} peticiones normales'
+    )
+    story.append(
+        Paragraph(
+            'La nota parte de 10 y cada fallo resta según su gravedad (crítica 4, alta 2, media 1, baja 0,5, '
+            'info 0). Con algún fallo crítico la nota máxima es 4, y con alguno alto, 7. Todas las '
+            f'comprobaciones son pasivas: {hechas} al sitio, sin ataques ni pruebas que puedan dañarlo.',
+            ESTILOS['nota'],
+        )
+    )
+
+    for categoria in datos.get('categorias', []):
+        bloques = [_comprobacion(c) for c in categoria.get('resultados', [])]
+        _seccion_con_bloques(story, categoria.get('nombre', ''), bloques)

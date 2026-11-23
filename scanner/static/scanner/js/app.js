@@ -243,7 +243,63 @@ const SecureScan = (() => {
                 }))}`}`;
     }
 
-    const RENDER = { logs: renderLogs, puertos: renderPuertos, headers: renderHeaders };
+    // --- Auditoría web ---------------------------------------------------
+    const GRAVEDADES = { critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', info: 'Info' };
+    const ESTADOS = { fallo: 'Fallo', ok: 'OK', no_aplica: 'No aplica' };
+    // Solo claves conocidas: nunca se usa texto libre como clase CSS.
+    const clave = (v, mapa, porDefecto) => (Object.hasOwn(mapa, v) ? v : porDefecto);
+    const decimal = (v) => num(v).toLocaleString('es', { maximumFractionDigits: 1 });
+
+    function renderComprobacion(c) {
+        const estado = clave(c.estado, ESTADOS, 'no_aplica');
+        const gravedad = clave(c.gravedad, GRAVEDADES, 'info');
+        const referencia = String(c.referencia || '');
+        const esFallo = estado === 'fallo';
+        return html`
+            <details class="check check-${estado}${esFallo ? ` grav-${gravedad}` : ''}"${esFallo && html` open`}>
+                <summary>
+                    <span class="check-estado estado-${estado}">${ESTADOS[estado]}</span>
+                    <span class="check-titulo">${c.titulo}</span>
+                    ${esFallo && html`<span class="badge-n badge-grav-${gravedad}">${GRAVEDADES[gravedad]}</span>`}
+                </summary>
+                <div class="check-cuerpo">
+                    <div class="check-campo"><div class="k">Qué significa</div><p>${c.explicacion}</p></div>
+                    <div class="check-campo"><div class="k">Evidencia</div><div class="item-valor">${c.evidencia}</div></div>
+                    <div class="check-campo"><div class="k">Recomendación</div><p>${c.recomendacion}</p></div>
+                    ${referencia.startsWith('https://') && html`
+                        <div class="check-ref">Referencia: <a href="${referencia}" target="_blank" rel="noopener noreferrer">${referencia}</a></div>`}
+                </div>
+            </details>`;
+    }
+
+    function renderWeb(r) {
+        const res = r.resumen || {};
+        const nota = Math.max(1, Math.min(10, num(r.nota ?? res.nota) || 1));
+        const porGravedad = res.fallos_por_gravedad || {};
+        const categorias = r.categorias || [];
+
+        const cabecera = html`
+            <div class="nota-global">Nota global: <strong>${decimal(nota)}</strong> / 10</div>
+            <div class="bar-wrap"><div class="bar-fill bar-${nivel(res.nivel_riesgo)}" data-ancho="${nota * 10}"></div></div>
+            <div class="puntuacion-texto">${num(r.peticiones)} ${num(r.peticiones) === 1 ? 'petición pasiva' : 'peticiones pasivas'} en ${decimal(r.duracion)} s</div>`;
+
+        return html`
+            ${bannerNivel('🌐', `Auditoría — ${r.url}`, res.nivel_riesgo, cabecera)}
+            <div class="stats-grid">
+                ${stat(res.total, 'Comprobaciones')}
+                ${stat(res.ok, 'Correctas', 'txt-BAJO')}
+                ${stat(res.fallos, 'Con fallos', num(res.fallos) > 0 ? 'txt-ALTO' : 'txt-BAJO')}
+                ${stat(res.no_aplica, 'No aplican', 'txt-gris')}
+            </div>
+            <div class="gravedades">${Object.keys(GRAVEDADES).map((g) => html`
+                <span class="badge-n badge-grav-${g}">${GRAVEDADES[g]}: ${num(porGravedad[g])}</span>`)}
+            </div>
+            ${categorias.length === 0 ? vacio('No hay resultados', 'error') : categorias.map((cat) => html`
+                ${seccion(`${cat.nombre} — ${num(cat.fallos)} ${num(cat.fallos) === 1 ? 'fallo' : 'fallos'}`)}
+                ${(cat.resultados || []).map(renderComprobacion)}`)}`;
+    }
+
+    const RENDER = { logs: renderLogs, puertos: renderPuertos, headers: renderHeaders, web: renderWeb };
 
     // ---------------------------------------------------------------------
     // Comunicación con el servidor
@@ -387,6 +443,13 @@ const SecureScan = (() => {
             if (!url) return;
             const autorizado = $('autorizadoHeaders').checked;
             ejecutar('headers', () => postJSON(CONFIG.urls.headers, { url, autorizado }));
+        });
+        $('form-web').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const url = $('inputUrlWeb').value.trim();
+            if (!url) return;
+            const autorizado = $('autorizadoWeb').checked;
+            ejecutar('web', () => postJSON(CONFIG.urls.auditoria, { url, autorizado }));
         });
     }
 

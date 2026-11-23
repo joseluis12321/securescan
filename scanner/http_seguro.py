@@ -15,7 +15,11 @@ from .seguridad import EntradaInvalida, crear_conexion_segura
 
 MAX_LONGITUD_URL = 2048
 MAX_REDIRECCIONES = 5
-USER_AGENT = "SecureScan/2.0 (+verificador de headers defensivo)"
+# Identifica a SecureScan ante el servidor analizado. Solo ASCII: algunos
+# servidores interpretan mal los acentos en las cabeceras.
+USER_AGENT = "SecureScan/3.0 (auditoria pasiva autorizada)"
+# Solo métodos que no modifican nada en el servidor.
+METODOS_PERMITIDOS = frozenset({"GET", "HEAD"})
 
 
 class _ConexionHTTPSegura(http.client.HTTPConnection):
@@ -51,26 +55,28 @@ class _RedireccionSegura(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def crear_opener() -> urllib.request.OpenerDirector:
+def crear_opener(seguir_redirecciones: bool = True) -> urllib.request.OpenerDirector:
     """Opener con solo los manejadores necesarios.
 
     No incluye file://, ftp:// ni proxies del entorno: así una redirección no
     puede usarse para leer archivos locales ni para saltarse la validación.
     El certificado no se verifica aquí a propósito (se analiza aparte) para
     poder revisar los headers de sitios con certificados inválidos.
+    Sin `seguir_redirecciones`, las respuestas 3xx llegan como HTTPError.
     """
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    opener = urllib.request.OpenerDirector()
-    for manejador in (
-        _ManejadorHTTPSeguro(),
-        _ManejadorHTTPSSeguro(context=ctx),
-        _RedireccionSegura(),
+    manejadores = [_ManejadorHTTPSeguro(), _ManejadorHTTPSSeguro(context=ctx)]
+    if seguir_redirecciones:
+        manejadores.append(_RedireccionSegura())
+    manejadores += [
         urllib.request.HTTPDefaultErrorHandler(),
         urllib.request.HTTPErrorProcessor(),
         urllib.request.UnknownHandler(),
-    ):
+    ]
+    opener = urllib.request.OpenerDirector()
+    for manejador in manejadores:
         opener.add_handler(manejador)
     return opener
 
@@ -99,24 +105,56 @@ def normalizar_url(url) -> tuple[str, str, int]:
     return url, partes.hostname, puerto_tls
 
 
-def obtener(url: str, timeout: float = 8):
-    """GET seguro. Devuelve (código, headers, url_final) también en respuestas 4xx/5xx.
+def _leer(respuesta, metodo: str, max_bytes: int) -> bytes:
+    if metodo == "HEAD" or max_bytes <= 0:
+        return b""
+    return respuesta.read(max_bytes)
 
-    Lanza EntradaInvalida si la URL o alguna redirección apunta a una red
-    interna, y OSError/HTTPException si el sitio no responde.
+
+def solicitar(
+    url: str,
+    *,
+    metodo: str = "GET",
+    timeout: float = 8,
+    max_bytes: int = 0,
+    seguir_redirecciones: bool = True,
+    cabeceras: dict | None = None,
+):
+    """Petición GET o HEAD segura. Devuelve (código, headers, url_final, cuerpo).
+
+    También devuelve las respuestas 4xx/5xx, que traen headers analizables, y
+    las 3xx cuando no se siguen redirecciones. Del cuerpo se leen como mucho
+    `max_bytes` (0 = no se lee). Lanza EntradaInvalida si la URL o alguna
+    redirección apunta a una red interna, y OSError/HTTPException si el sitio
+    no responde.
     """
+    if metodo not in METODOS_PERMITIDOS:
+        raise ValueError(f"Método HTTP no permitido: {metodo}")
     # Seguro: el opener solo tiene manejadores http/https (sin file:// ni ftp://).
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
+    req = urllib.request.Request(  # noqa: S310
+        url, method=metodo, headers={**(cabeceras or {}), "User-Agent": USER_AGENT}
+    )
     try:
-        with crear_opener().open(req, timeout=timeout) as respuesta:
-            return respuesta.status, respuesta.headers, respuesta.geturl()
+        with crear_opener(seguir_redirecciones).open(req, timeout=timeout) as respuesta:
+            return (
+                respuesta.status,
+                respuesta.headers,
+                respuesta.geturl(),
+                _leer(respuesta, metodo, max_bytes),
+            )
     except urllib.error.HTTPError as e:
-        # Una respuesta 4xx/5xx también trae headers que se pueden analizar.
         # e.headers es None si el error lo generó nuestro propio manejador.
-        # Las 3xx que llegan aquí son redirecciones rechazadas (bucle, esquema...).
-        if e.headers is None or 300 <= e.code < 400:
+        # Si se siguen redirecciones, las 3xx que llegan aquí son redirecciones
+        # rechazadas (bucle, esquema no permitido...).
+        if e.headers is None or (seguir_redirecciones and 300 <= e.code < 400):
             raise
         try:
-            return e.code, e.headers, e.geturl()
+            return e.code, e.headers, e.geturl(), _leer(e, metodo, max_bytes)
         finally:
             e.close()
+
+
+def obtener(url: str, timeout: float = 8):
+    """GET seguro. Devuelve (código, headers, url_final) también en respuestas 4xx/5xx."""
+    codigo, headers, url_final, _cuerpo = solicitar(url, timeout=timeout)
+    return codigo, headers, url_final

@@ -140,6 +140,36 @@ input[type=file] { display: none; }
 .tag-mal { background: #f8514922; color: var(--rojo); border: 1px solid var(--rojo); }
 .tag-ok { background: #3fb95022; color: var(--verde); border: 1px solid var(--verde); }
 
+/* --- Auditoría web --- */
+.nota-global { font-size: 14px; color: var(--texto); margin-top: 4px; }
+.nota-global strong { font-size: 20px; }
+.gravedades { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.check { background: var(--panel); border: 1px solid var(--borde); border-left-width: 3px; border-radius: 10px; margin-bottom: 8px; }
+.check-ok { border-left-color: var(--verde); }
+.check-no_aplica { border-left-color: var(--borde-claro); }
+.check-fallo { border-left-color: var(--amarillo); }
+.check-fallo.grav-alta, .check-fallo.grav-critica { border-left-color: var(--rojo); }
+.check-fallo.grav-info { border-left-color: var(--azul); }
+.check summary { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; list-style: none; }
+.check summary::-webkit-details-marker { display: none; }
+.check summary::after { content: "▸"; margin-left: auto; color: var(--texto-tenue); transition: transform 0.2s; }
+.check[open] summary::after { transform: rotate(90deg); }
+.check-titulo { font-weight: 600; font-size: 13px; flex: 1; overflow-wrap: anywhere; }
+.check-estado { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+.estado-ok { background: #3fb95022; color: var(--verde); }
+.estado-fallo { background: #f8514922; color: var(--rojo); }
+.estado-no_aplica { background: var(--borde); color: var(--texto-suave); }
+.check-cuerpo { padding: 0 16px 14px; border-top: 1px solid var(--borde); }
+.check-campo { margin-top: 10px; }
+.check-campo .k { font-size: 11px; color: var(--texto-suave); text-transform: uppercase; margin-bottom: 3px; }
+.check-campo p { font-size: 13px; line-height: 1.5; }
+.check-ref { font-size: 11px; color: var(--texto-suave); margin-top: 10px; overflow-wrap: anywhere; }
+.badge-grav-critica { background: #f8514944; color: #ff7b72; border: 1px solid var(--rojo); }
+.badge-grav-alta { background: #f8514922; color: var(--rojo); border: 1px solid var(--rojo); }
+.badge-grav-media { background: #d2992222; color: var(--amarillo); border: 1px solid var(--amarillo); }
+.badge-grav-baja { background: #58a6ff22; color: var(--azul); border: 1px solid var(--azul); }
+.badge-grav-info { background: var(--borde); color: var(--texto-suave); border: 1px solid var(--borde-claro); }
+
 /* --- Barras y gráficas --- */
 .bar-wrap { background: var(--borde); border-radius: 6px; height: 8px; margin: 6px 0 3px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 6px; transition: width 1s; }

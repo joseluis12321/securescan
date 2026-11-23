@@ -9,6 +9,7 @@ urlpatterns = [
     path('analizar/', views.analizar, name='analizar'),
     path('escanear/', views.escanear_puertos, name='escanear'),
     path('headers/', views.verificar_headers, name='headers'),
+    path('auditoria/', views.auditoria_web, name='auditoria'),
     path('analisis/<int:pk>/', views.detalle, name='detalle'),
     path('analisis/<int:pk>/pdf/', views.exportar_pdf, name='exportar_pdf'),
     path('analisis/<int:pk>/json/', views.exportar_json, name='exportar_json'),

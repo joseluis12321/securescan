@@ -1,11 +1,11 @@
 # 🛡️ SecureScan
 
-> Herramienta web de ciberseguridad defensiva: análisis de logs, escaneo de puertos y auditoría de headers HTTP, con reportes PDF.
+> Herramienta web de ciberseguridad defensiva: análisis de logs, escaneo de puertos, auditoría web pasiva y verificación de headers HTTP, con reportes PDF.
 
 [![CI](https://github.com/joseluis12321/securescan/actions/workflows/ci.yml/badge.svg)](https://github.com/joseluis12321/securescan/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.14-blue?style=flat-square&logo=python)
 ![Django](https://img.shields.io/badge/Django-6.0-green?style=flat-square&logo=django)
-![Cobertura](https://img.shields.io/badge/cobertura-94%25-brightgreen?style=flat-square)
+![Cobertura](https://img.shields.io/badge/cobertura-96%25-brightgreen?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)
 
 ---
@@ -13,8 +13,8 @@
 ## ¿Qué es SecureScan?
 
 Una aplicación web para revisar la seguridad de tus propios sistemas sin instalar herramientas externas:
-sube un log y detecta ataques, escanea los puertos expuestos de un servidor o audita la configuración HTTPS
-y los headers de seguridad de un sitio web. Cada análisis se guarda en tu historial y se puede exportar
+sube un log y detecta ataques, escanea los puertos expuestos de un servidor o audita la configuración de
+seguridad de un sitio web y obtén una nota del 1 al 10 con explicaciones en lenguaje sencillo. Cada análisis se guarda en tu historial y se puede exportar
 como reporte PDF o JSON.
 
 ![Analizador de logs](docs/capturas/analizador-logs.png)
@@ -33,6 +33,7 @@ como reporte PDF o JSON.
 - 23 puertos comunes en paralelo, más hasta 100 puertos personalizados.
 - **Identificación pasiva del servicio** (banner): muestra, por ejemplo, `SSH-2.0-OpenSSH_6.6.1` sin enviar nada al servidor.
 - Marca los servicios peligrosos expuestos (Redis, MongoDB, RDP, SMB…) con recomendaciones concretas.
+- El reporte PDF explica cada puerto abierto: qué servicio es, qué riesgo tiene y cómo protegerlo.
 
 ### 3. Verificador de headers HTTP
 - 7 headers de seguridad, **validando su valor** (HSTS corto, CSP con `'unsafe-inline'`, `nosniff` mal escrito…).
@@ -40,7 +41,14 @@ como reporte PDF o JSON.
 - Certificado TLS: validez, días hasta que caduca, versión de TLS, cifrado y emisor.
 - Comprueba de verdad la **redirección HTTP → HTTPS**. Puntuación sobre 100.
 
-### 4. Historial y reportes
+### 4. Auditoría web
+- Comprobaciones **pasivas**: solo peticiones GET/HEAD normales, como las de un navegador. Nada de fuerza bruta, inyecciones ni fuzzing.
+- Cada comprobación indica su **gravedad** (info, baja, media, alta, crítica), su **estado** (OK, fallo, no aplica), la **evidencia** concreta, una **explicación para personas no técnicas**, cómo **solucionarlo** y una **referencia** (OWASP o documentación oficial).
+- **Nota global del 1 al 10**: parte de 10 y cada fallo resta según su gravedad (crítica 4, alta 2, media 1, baja 0,5). Con un fallo crítico la nota máxima es 4 y con uno alto, 7.
+- Categoría disponible: **cabeceras HTTP** — HSTS, CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, COOP, CORP, X-XSS-Protection y cabeceras que revelan la versión del servidor o la tecnología.
+- Arquitectura modular: cada comprobación es una clase que se registra sola en el catálogo (ver [`scanner/auditoria/base.py`](scanner/auditoria/base.py)).
+
+### 5. Historial y reportes
 - Historial de análisis por usuario, con filtros por tipo y paginación.
 - Vista de detalle de cada análisis guardado, que se puede eliminar.
 - **Reporte PDF** con resumen ejecutivo, hallazgos, tablas y recomendaciones. Se genera en el servidor a partir del análisis guardado, así que no se puede falsificar desde el navegador.
@@ -72,6 +80,7 @@ Una herramienta de seguridad tiene que ser segura. SecureScan incluye:
 | **Rate limiting** | Límite de peticiones por usuario en cada análisis. |
 | **Aislamiento** | Cada usuario solo ve, descarga y elimina sus propios análisis. |
 | **Uso responsable** | Antes de escanear hay que confirmar que se tiene autorización; cada escaneo queda registrado con usuario y objetivo. |
+| **Auditoría pasiva** | Solo GET/HEAD, máximo 5 peticiones por segundo y 60 por auditoría, 5 s de espera por petición, 45 s en total y un User-Agent que identifica a SecureScan. Las reglas las impone el cliente HTTP, no cada comprobación. |
 | **Entradas** | Validación de tamaño y tipo de archivo, puertos y URLs; protección contra ReDoS. |
 | **PDF** | Escapado del contenido (evita inyección de markup y `<img src>` en ReportLab). |
 | **HTTP** | HSTS, cookies seguras, `X-Frame-Options: DENY`, `Referrer-Policy`, COOP. |
@@ -157,7 +166,7 @@ Todo se configura con variables de entorno o el archivo `.env` (plantilla: [.env
 ## Desarrollo
 
 ```bash
-pytest --cov              # 100 tests + cobertura (mínimo 85 %)
+pytest --cov              # 169 tests + cobertura (mínimo 85 %)
 ruff check . && ruff format --check .   # lint y formato
 bandit -c pyproject.toml -r scanner securescan   # análisis de seguridad del código
 pip-audit -r requirements.txt          # vulnerabilidades en dependencias
@@ -172,6 +181,12 @@ La integración continua ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 securescan/            Configuración de Django (settings por entorno)
 scanner/
 ├── analyzer.py        Analizador de logs
+├── auditoria/         Auditoría web pasiva y modular
+│   ├── base.py            Gravedades, estados, resultados y catálogo de comprobaciones
+│   ├── cliente.py         Cliente HTTP pasivo (solo GET/HEAD, límites de ritmo y tiempo)
+│   ├── motor.py           Ejecuta el catálogo, aísla errores y agrupa resultados
+│   ├── puntuacion.py      Nota global del 1 al 10
+│   └── comprobaciones/    Una clase por comprobación, un módulo por categoría
 ├── port_scanner.py    Escáner de puertos y banners
 ├── header_checker.py  Auditoría de headers, cookies y TLS
 ├── http_seguro.py     Cliente HTTP saliente protegido contra SSRF
@@ -194,6 +209,7 @@ Todos los endpoints requieren sesión iniciada y token CSRF (`X-CSRFToken`).
 | `POST` | `/analizar/` | `multipart`: `archivo_log` | Analiza un log. |
 | `POST` | `/escanear/` | `{"host": "...", "puertos_extra": [8080], "autorizado": true}` | Escanea puertos. |
 | `POST` | `/headers/` | `{"url": "...", "autorizado": true}` | Audita headers y TLS. |
+| `POST` | `/auditoria/` | `{"url": "...", "autorizado": true}` | Auditoría web pasiva con nota del 1 al 10. |
 | `GET` | `/analisis/<id>/pdf/` | — | Descarga el reporte PDF. |
 | `GET` | `/analisis/<id>/json/` | — | Descarga el análisis en JSON. |
 | `GET` | `/salud/` | — | Healthcheck (sin login). |

@@ -23,6 +23,12 @@ class ObjetivoNoPermitido(EntradaInvalida):
     """El objetivo resuelve a una dirección interna, privada o reservada."""
 
 
+class ServidorOcupado(EntradaInvalida):
+    """Hay demasiados escaneos o auditorías en curso en este proceso."""
+
+    status = 503
+
+
 def _permitir_redes_privadas() -> bool:
     return getattr(settings, "SECURESCAN_PERMITIR_REDES_PRIVADAS", False)
 

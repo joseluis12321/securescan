@@ -261,7 +261,7 @@ SECURESCAN_MAX_PUERTOS_EXTRA = 100
 # Días que se conservan los análisis (comando: manage.py purgar_analisis).
 SECURESCAN_RETENCION_DIAS = env.int('SECURESCAN_RETENCION_DIAS', default=90)
 
-# Escaneos de puertos simultáneos en todo el servidor (por proceso).
+# Escaneos de puertos y auditorías web simultáneos (de cada tipo, por proceso).
 SECURESCAN_MAX_ESCANEOS_SIMULTANEOS = env.int('SECURESCAN_MAX_ESCANEOS_SIMULTANEOS', default=4)
 
 # Límites de peticiones (django-ratelimit). Formato: "<n>/<s|m|h|d>".
@@ -269,4 +269,5 @@ SECURESCAN_RATE_LOGIN = '5/m'
 SECURESCAN_RATE_ANALISIS = '20/m'
 SECURESCAN_RATE_ESCANEO = '10/m'
 SECURESCAN_RATE_HEADERS = '20/m'
+SECURESCAN_RATE_AUDITORIA = '5/m'
 SECURESCAN_RATE_PDF = '30/m'

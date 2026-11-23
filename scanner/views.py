@@ -19,6 +19,7 @@ from django_ratelimit.decorators import ratelimit
 from django_ratelimit.exceptions import Ratelimited
 
 from .analyzer import analizar_logs
+from .auditoria import auditar
 from .header_checker import verificar_headers as _verificar_headers
 from .models import Analisis
 from .pdf_generator import generar_reporte_pdf
@@ -129,6 +130,7 @@ def _config_frontend() -> dict:
             "analizar": reverse("analizar"),
             "escanear": reverse("escanear"),
             "headers": reverse("headers"),
+            "auditoria": reverse("auditoria"),
             "pdf": reverse("exportar_pdf", args=[0]),
             "json": reverse("exportar_json", args=[0]),
             "detalle": reverse("detalle", args=[0]),
@@ -278,6 +280,26 @@ def verificar_headers(request):
         # Fallo al contactar con el sitio (no es culpa de la petición).
         return JsonResponse({"error": resultado["error"]}, status=502)
     analisis = _guardar(request, Analisis.Tipo.HEADERS, resultado["url"], resultado)
+    return JsonResponse({"success": True, "id": analisis.id, "resultado": resultado})
+
+
+@require_POST
+@vista_api
+@ratelimit(key="user_or_ip", rate=settings.SECURESCAN_RATE_AUDITORIA, block=True)
+def auditoria_web(request):
+    data = _leer_json(request)
+    url = data.get("url", "")
+    if not isinstance(url, str) or not url.strip():
+        raise EntradaInvalida("URL requerida")
+
+    _exigir_autorizacion(data)
+
+    logger.info("Auditoría web: usuario=%s url=%s", request.user.pk, url.strip())
+    resultado = auditar(url.strip())
+    if "error" in resultado:
+        # Fallo al contactar con el sitio (no es culpa de la petición).
+        return JsonResponse({"error": resultado["error"]}, status=502)
+    analisis = _guardar(request, Analisis.Tipo.WEB, resultado["url"], resultado)
     return JsonResponse({"success": True, "id": analisis.id, "resultado": resultado})
 
 
